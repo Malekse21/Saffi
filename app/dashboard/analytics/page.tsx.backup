@@ -1,0 +1,484 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import {
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    LineChart,
+    Line,
+    PieChart,
+    Pie,
+    Cell,
+    Legend,
+} from "recharts";
+import { Download, Calendar as CalendarIcon, TrendingUp, Star } from "lucide-react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import { HiddenReportTemplate } from "@/components/HiddenReportTemplate";
+import { getAnalytics, AnalyticsData } from "@/lib/analytics";
+import { useDashboard } from "../layout";
+import { createClient } from "@/utils/supabase/client";
+
+export default function AnalyticsPage() {
+    const { primaryColor } = useDashboard();
+    const COLORS = ["#000000", primaryColor, "#2C2B57"];
+
+    const [timeRange, setTimeRange] = useState<"day" | "week" | "month" | "year">("day");
+    const [data, setData] = useState<AnalyticsData | null>(null);
+    const [loading, setLoading] = useState(true);
+    const reportRef = useRef<HTMLDivElement>(null);
+    const [feedbacks, setFeedbacks] = useState<any[]>([]);
+
+    // Fetch analytics whenever the selected time range changes
+    useEffect(() => {
+        const fetchData = async () => {
+            setLoading(true);
+            try {
+                const result = await getAnalytics(timeRange);
+                setData(result);
+            } catch (err) {
+                console.error("Failed to load analytics", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, [timeRange]);
+
+    // Fetch patient feedback
+    useEffect(() => {
+        const fetchFeedback = async () => {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (user) {
+                const { data } = await supabase
+                    .from('patient_feedback')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .order('created_at', { ascending: false })
+                    .limit(20);
+
+                if (data) setFeedbacks(data);
+            }
+        };
+
+        fetchFeedback();
+    }, []);
+
+    const handleDownloadPDF = async () => {
+        if (!reportRef.current) return;
+        try {
+            const canvas = await html2canvas(reportRef.current, {
+                scale: 2,
+                logging: false,
+                useCORS: true,
+            });
+            const imgData = canvas.toDataURL("image/jpeg", 1.0);
+            const pdf = new jsPDF("p", "mm", "a4");
+            pdf.addImage(imgData, "JPEG", 0, 0, 210, 297);
+            pdf.save("Saffi-Analytics.pdf");
+        } catch (e) {
+            console.error("PDF generation failed", e);
+            alert("Erreur lors de la génération du PDF");
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-96">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4" />
+                    <p className="text-gray-500 font-medium">Chargement des statistiques…</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Empty state when there is no patient data
+    if (!data || data.stats.total === 0) {
+        return (
+            <div className="space-y-8" ref={reportRef}>
+                <h1 className="font-display font-black text-4xl uppercase tracking-tight">Analytiques & Retours</h1>
+                <div className="bg-white border-2 border-black p-12 shadow-[8px_8px_0px_0px_#000] text-center">
+                    <TrendingUp className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                    <h3 className="font-bold text-xl text-gray-400 mb-2">Aucune donnée disponible</h3>
+                    <p className="text-gray-500">Ajoutez des patients pour voir vos statistiques.</p>
+                    <button
+                        onClick={handleDownloadPDF}
+                        className="mt-4 bg-[var(--color-primary)] text-white px-6 py-3 font-bold uppercase tracking-wider border-2 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center gap-2"
+                    >
+                        <Download className="h-5 w-5" />
+                        Télécharger Rapport
+                    </button>
+                </div>
+            </div>
+"use client";
+
+        import { useState, useEffect, useRef } from "react";
+        import {
+            BarChart,
+            Bar,
+            XAxis,
+            YAxis,
+            CartesianGrid,
+            Tooltip,
+            ResponsiveContainer,
+            LineChart,
+            Line,
+            PieChart,
+            Pie,
+            Cell,
+            Legend,
+        } from "recharts";
+        import { Download, Calendar as CalendarIcon, TrendingUp, Star } from "lucide-react";
+        import html2canvas from "html2canvas";
+        import jsPDF from "jspdf";
+        import { HiddenReportTemplate } from "@/components/HiddenReportTemplate";
+        import { getAnalytics, AnalyticsData } from "@/lib/analytics";
+        import { useDashboard } from "../layout";
+        import { createClient } from "@/utils/supabase/client";
+
+        export default function AnalyticsPage() {
+            const { primaryColor } = useDashboard();
+            const COLORS = ["#000000", primaryColor, "#2C2B57"];
+
+            const [timeRange, setTimeRange] = useState<"day" | "week" | "month" | "year">("day");
+            const [data, setData] = useState<AnalyticsData | null>(null);
+            const [loading, setLoading] = useState(true);
+            const reportRef = useRef<HTMLDivElement>(null);
+            const [feedbacks, setFeedbacks] = useState<any[]>([]);
+
+            // Fetch analytics whenever the selected time range changes
+            useEffect(() => {
+                const fetchData = async () => {
+                    setLoading(true);
+                    try {
+                        const result = await getAnalytics(timeRange);
+                        setData(result);
+                    } catch (err) {
+                        console.error("Failed to load analytics", err);
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+                fetchData();
+            }, [timeRange]);
+
+            // Fetch patient feedback
+            useEffect(() => {
+                const fetchFeedback = async () => {
+                    const supabase = createClient();
+                    const { data: { user } } = await supabase.auth.getUser();
+
+                    if (user) {
+                        const { data } = await supabase
+                            .from('patient_feedback')
+                            .select('*')
+                            .eq('user_id', user.id)
+                            .order('created_at', { ascending: false })
+                            .limit(20);
+
+                        if (data) setFeedbacks(data);
+                    }
+                };
+
+                fetchFeedback();
+            }, []);
+
+            const handleDownloadPDF = async () => {
+                if (!reportRef.current) return;
+                try {
+                    const canvas = await html2canvas(reportRef.current, {
+                        scale: 2,
+                        logging: false,
+                        useCORS: true,
+                    });
+                    const imgData = canvas.toDataURL("image/jpeg", 1.0);
+                    const pdf = new jsPDF("p", "mm", "a4");
+                    pdf.addImage(imgData, "JPEG", 0, 0, 210, 297);
+                    pdf.save("Saffi-Analytics.pdf");
+                } catch (e) {
+                    console.error("PDF generation failed", e);
+                    alert("Erreur lors de la génération du PDF");
+                }
+            };
+
+            if (loading) {
+                return (
+                    <div className="flex items-center justify-center h-96">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4" />
+                            <p className="text-gray-500 font-medium">Chargement des statistiques…</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Empty state when there is no patient data
+            if (!data || data.stats.total === 0) {
+                return (
+                    <div className="space-y-8" ref={reportRef}>
+                        <h1 className="font-display font-black text-4xl uppercase tracking-tight">Analytiques & Retours</h1>
+                        <div className="bg-white border-2 border-black p-12 shadow-[8px_8px_0px_0px_#000] text-center">
+                            <TrendingUp className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                            <h3 className="font-bold text-xl text-gray-400 mb-2">Aucune donnée disponible</h3>
+                            <p className="text-gray-500">Ajoutez des patients pour voir vos statistiques.</p>
+                            <button
+                                onClick={handleDownloadPDF}
+                                className="mt-4 bg-[var(--color-primary)] text-white px-6 py-3 font-bold uppercase tracking-wider border-2 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center gap-2"
+                            >
+                                <Download className="h-5 w-5" />
+                                Télécharger Rapport
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Main analytics view
+            return (
+                <div className="space-y-8" ref={reportRef}>
+                    {/* Header with Date */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <button className="p-2 border-2 border-black bg-white hover:bg-gray-100 transition-colors">
+                                <CalendarIcon className="h-5 w-5" />
+                            </button>
+                            <h1 className="font-display font-black text-2xl uppercase tracking-tight">
+                                {new Date().toLocaleDateString('fr-FR', { weekday: 'long', month: 'long', day: 'numeric' })}
+                            </h1>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="flex bg-gray-100 border-2 border-black p-1">
+                                {(["day", "week", "month", "year"] as const).map((range) => (
+                                    <button
+                                        key={range}
+                                        onClick={() => setTimeRange(range)}
+                                        className={`px-4 py-2 font-bold uppercase text-sm transition-all ${timeRange === range ? "bg-black text-white shadow-[2px_2px_0px_0px_#000]" : "text-gray-500 hover:text-black"
+                                            }`}
+                                    >
+                                        {range === "day"
+                                            ? "Jour"
+                                            : range === "week"
+                                                ? "Semaine"
+                                                : range === "month"
+                                                    ? "Mois"
+                                                    : "Année"}
+                                    </button>
+                                ))}
+                            </div>
+                            <button
+                                onClick={handleDownloadPDF}
+                                className="bg-[var(--color-primary)] text-white px-6 py-3 font-bold uppercase tracking-wider border-2 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center gap-2"
+                            >
+                                <Download className="h-5 w-5" />
+                                Télécharger
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* 8 KPI Cards in 4x2 Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <KPICard
+                            title="En Attente"
+                            value={data.stats.waiting?.toString() || "0"}
+                            color="bg-cyan-100"
+                            borderColor="border-cyan-500"
+                        />
+                        <KPICard
+                            title="Pic d'Attente à 9h"
+                            value={data.stats.peak?.toString() || "0"}
+                            color="bg-red-100"
+                            borderColor="border-red-500"
+                        />
+                        <KPICard
+                            title="En Cours"
+                            value={data.stats.active?.toString() || "0"}
+                            color="bg-blue-100"
+                            borderColor="border-blue-500"
+                        />
+                        <KPICard
+                            title="Attente Moy."
+                            value={`${data.stats.avgWait} min`}
+                            color="bg-cyan-100"
+                            borderColor="border-cyan-500"
+                        />
+                        <KPICard
+                            title="Total Servis"
+                            value={data.stats.total.toString()}
+                            color="bg-green-100"
+                            borderColor="border-green-500"
+                        />
+                        <KPICard
+                            title="Absents"
+                            value={data.stats.noShows?.toString() || "0"}
+                            color="bg-red-100"
+                            borderColor="border-red-500"
+                        />
+                        <KPICard
+                            title="Annulés"
+                            value={data.stats.cancelled?.toString() || "0"}
+                            color="bg-blue-100"
+                            borderColor="border-blue-500"
+                        />
+                        <KPICard
+                            title="Temps Serv. Moy."
+                            value={`${data.stats.avgServe || 0} min`}
+                            color="bg-cyan-100"
+                            borderColor="border-cyan-500"
+                        />
+                    </div>
+
+                    {/* Charts Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Tickets per Hour Chart */}
+                        <div className="bg-white border-4 border-black p-8 shadow-[8px_8px_0px_0px_#000]">
+                            <h3 className="font-black text-xl mb-6 uppercase tracking-tight">
+                                Tickets par Heure
+                            </h3>
+                            <div className="h-[300px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={data.affluence}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+                                        <XAxis
+                                            dataKey="name"
+                                            stroke="#000"
+                                            tick={{ fill: "#000", fontWeight: "bold", fontSize: 12 }}
+                                            axisLine={{ strokeWidth: 2 }}
+                                            tickLine={false}
+                                            dy={10}
+                                        />
+                                        <YAxis
+                                            stroke="#000"
+                                            tick={{ fill: "#000", fontWeight: "bold", fontSize: 12 }}
+                                            axisLine={{ strokeWidth: 2 }}
+                                            tickLine={false}
+                                            dx={-10}
+                                        />
+                                        <Tooltip
+                                            cursor={{ fill: "#f3f4f6" }}
+                                            contentStyle={{
+                                                background: "#fff",
+                                                border: "2px solid #000",
+                                                borderRadius: 0,
+                                                fontWeight: "bold",
+                                            }}
+                                        />
+                                        <Bar dataKey="patients" fill="#0ea5e9" stroke="#000" strokeWidth={2} radius={[0, 0, 0, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        {/* Wait Time per Hour Chart */}
+                        <div className="bg-white border-4 border-black p-8 shadow-[8px_8px_0px_0px_#000]">
+                            <h3 className="font-black text-xl mb-6 uppercase tracking-tight">
+                                Attente Moy. par Heure (mins)
+                            </h3>
+                            <div className="h-[300px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={data.waitTime}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+                                        <XAxis
+                                            dataKey="name"
+                                            stroke="#000"
+                                            tick={{ fill: "#000", fontWeight: "bold", fontSize: 12 }}
+                                            axisLine={{ strokeWidth: 2 }}
+                                            tickLine={false}
+                                            dy={10}
+                                        />
+                                        <YAxis
+                                            stroke="#000"
+                                            tick={{ fill: "#000", fontWeight: "bold", fontSize: 12 }}
+                                            axisLine={{ strokeWidth: 2 }}
+                                            tickLine={false}
+                                            dx={-10}
+                                        />
+                                        <Tooltip
+                                            cursor={{ fill: "#f3f4f6" }}
+                                            contentStyle={{
+                                                background: "#fff",
+                                                border: "2px solid #000",
+                                                borderRadius: 0,
+                                                fontWeight: "bold",
+                                            }}
+                                        />
+                                        <Legend
+                                            wrapperStyle={{ fontWeight: "bold", fontSize: 12 }}
+                                            iconType="square"
+                                        />
+                                        <Bar dataKey="planned" fill="#6366f1" stroke="#000" strokeWidth={2} name="Prévu" />
+                                        <Bar dataKey="actual" fill="#10b981" stroke="#000" strokeWidth={2} name="Réel" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Feedback Section */}
+                    {feedbacks.length > 0 && (
+                        <div className="bg-white border-4 border-black shadow-[8px_8px_0px_0px_#000]">
+                            <div className="border-b-4 border-black p-6">
+                                <h2 className="font-display font-black text-2xl uppercase tracking-tight">
+                                    Retours Patients
+                                </h2>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                {feedbacks.map((fb) => (
+                                    <div key={fb.id} className="border-2 border-black p-4 bg-gray-50">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            {[1, 2, 3, 4, 5].map((s) => (
+                                                <Star
+                                                    key={s}
+                                                    className={`h-5 w-5 ${s <= fb.rating ? "fill-[#2C2B57] text-[#2C2B57]" : "fill-gray-300 text-gray-300"}`}
+                                                />
+                                            ))}
+                                            <span className="text-xs text-gray-500 ml-auto font-mono">
+                                                {new Date(fb.created_at).toLocaleDateString('fr-FR', {
+                                                    year: 'numeric',
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </span>
+                                        </div>
+                                        {fb.feedback_text && (
+                                            <p className="text-gray-700 font-medium">{fb.feedback_text}</p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Hidden Template for PDF */}
+                    <HiddenReportTemplate
+                        totalPatients={data.stats.total}
+                        avgWait={data.stats.avgWait}
+                        noShowPct={data.stats.noShows}
+                        chartData={data.affluence}
+                        waitTimeData={data.waitTime}
+                        patientTypeData={data.patientType}
+                        primaryColor={primaryColor}
+                    />
+                </div>
+            );
+        }
+
+        function KPICard({ title, value, color, borderColor }: { title: string; value: string; color: string; borderColor: string }) {
+            return (
+                <div className={`bg-white border-4 ${borderColor} p-6 shadow-[8px_8px_0px_0px_#000]`}>
+                    <p className="text-gray-500 font-bold text-sm uppercase mb-2">{title}</p>
+                    <div className="flex items-end justify-between">
+                        <span className={`font-display font-black text-5xl ${color.replace('bg-', 'text-')}`}>{value}</span>
+                    </div>
+                </div>
+            );
+        }

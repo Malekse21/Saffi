@@ -1,26 +1,62 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  --color-background: #FFFFFF;
+  --color-foreground: #000000;
+  --color-primary: #2C2B57;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-solar-yellow: #D4FF32;
+  /* Light Green */
+  --color-deep-purple: #D4FF32;
+  /* Reusing Light Green for consistency or keeping distinct if needed, but user asked for light green accent */
+  --color-paper-white: #FDFBF7;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* NLP Landing Page Colors */
+  --color-paper: #FDFBF7;
+  --color-saffi-yellow: #FACC15;
+  --color-saffi-indigo: #6366F1;
+  --color-saffi-green: #10B981;
+  --color-saffi-dark: #0f172a;
+
+  --font-sans: var(--font-bricolage);
+  --font-display: var(--font-giniloh);
+  --font-body: var(--font-inter);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+@utility neo-shadow {
+  box-shadow: 6px 6px 0px 0px #000000;
+}
+
+@utility neo-shadow-sm {
+  box-shadow: 2px 2px 0px 0px #000000;
+}
+
+@utility neo-shadow-lg {
+  box-shadow: 8px 8px 0px 0px #000000;
+}
+
+@utility neo-border {
+  border: 2px solid #000000;
+}
+
+@utility neo-button {
+  @apply neo-border neo-shadow transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none;
+}
+
+.bg-striped-yellow {
+  background-color: #FACC15;
+  /* Tailwind Yellow-400 */
+  background-image: repeating-linear-gradient(-45deg,
+      transparent,
+      transparent 10px,
+      rgba(0, 0, 0, 0.1) 10px,
+      rgba(0, 0, 0, 0.1) 20px);
+  color: black;
 }

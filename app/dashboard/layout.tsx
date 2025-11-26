@@ -119,9 +119,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
                 // Redirect based on plan if user is on the root dashboard page
                 if (pathname === '/dashboard' || pathname === '/dashboard/') {
-                    if (profile.plan === 'digital') {
-                        router.push('/dashboard/digital');
-                    } else if (profile.plan === 'connect') {
+                    if (profile.plan === 'connect') {
                         router.push('/dashboard/connect');
                     }
                 }
@@ -214,24 +212,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                         </button>
                     </div>
                     <nav className="flex-1 py-8 px-4 space-y-3">
-                        {(plan === 'digital' || plan === null) && (
-                            <SidebarItem
-                                href="/dashboard/digital"
-                                icon={LayoutDashboard}
-                                label={plan === 'digital' ? "Tableau de Bord" : "Digital"}
-                                isActive={pathname.startsWith("/dashboard/digital")}
-                                collapsed={sidebarCollapsed}
-                            />
-                        )}
-                        {(plan === 'connect' || plan === null) && (
-                            <SidebarItem
+
+                        <SidebarItem
                                 href="/dashboard/connect"
                                 icon={Cast}
-                                label={plan === 'connect' ? "Tableau de Bord" : "Connect"}
+                                label="Tableau de Bord"
                                 isActive={pathname.startsWith("/dashboard/connect")}
                                 collapsed={sidebarCollapsed}
                             />
-                        )}
 
                         <SidebarItem href="/dashboard/analytics" icon={BarChart3} label="Statistiques" isActive={pathname === "/dashboard/analytics"} collapsed={sidebarCollapsed} />
                         <SidebarItem href="/dashboard/qr" icon={QrCode} label="Borne QR" isActive={pathname === "/dashboard/qr"} collapsed={sidebarCollapsed} />
