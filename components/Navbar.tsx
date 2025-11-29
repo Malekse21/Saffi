@@ -1,13 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
 
 export function Navbar() {
     return (
         <nav className="fixed top-0 left-0 right-0 z-50 flex h-20 items-center justify-between px-6 md:px-12 bg-white border-b-2 border-black">
-            <Link href="/" className="font-sans text-2xl font-black tracking-tighter uppercase text-black">
-                Saffi.
+            <Link href="/" className="relative h-12 w-36 block">
+                <Image
+                    src="/media/black_logo.png"
+                    alt="Saffi Logo"
+                    fill
+                    className="object-contain object-left"
+                    priority
+                />
             </Link>
 
             <div className="flex items-center gap-6">

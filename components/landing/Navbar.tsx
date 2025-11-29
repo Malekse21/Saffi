@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Menu, X } from 'lucide-react';
 import NeoButton from './NeoButton';
 import Link from 'next/link';
+import Image from 'next/image';
 
 const Navbar: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -15,8 +16,15 @@ const Navbar: React.FC = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between items-center h-20">
                     <div className="flex-shrink-0 flex items-center gap-2">
-                        <div className="w-8 h-8 bg-saffi-indigo border-2 border-black shadow-neo-sm"></div>
-                        <span className="font-display font-bold text-3xl tracking-tight">Saffi.</span>
+                        <Link href="/" className="relative h-12 w-36 block">
+                            <Image
+                                src="/media/black_logo.png"
+                                alt="Saffi Logo"
+                                fill
+                                className="object-contain object-left"
+                                priority
+                            />
+                        </Link>
                     </div>
 
                     <div className="hidden md:flex items-center space-x-8">

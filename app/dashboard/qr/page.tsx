@@ -1,171 +1,149 @@
 "use client";
 
 import { useRef } from "react";
-import { Printer, Download, Camera, Smartphone, Ticket } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { useDashboard } from "../layout";
+import { Printer, Download } from "lucide-react";
 
 export default function QRStationPage() {
-    const { clinicName, clinicId } = useDashboard();
-    const printRef = useRef<HTMLDivElement>(null);
+    const posterRef = useRef<HTMLDivElement>(null);
+    const clinicName = "Cabinet Dr. Malek"; // This could be dynamic later
+    const qrUrl = "https://saffi.app/checkin/123"; // Example URL
 
     const handlePrint = () => {
         window.print();
     };
 
     const handleDownloadPDF = async () => {
-        if (!printRef.current) return;
+        if (!posterRef.current) return;
 
         try {
-            const canvas = await html2canvas(printRef.current, {
-                scale: 2,
+            const canvas = await html2canvas(posterRef.current, {
+                scale: 2, // Higher resolution
                 useCORS: true,
-                logging: false
             });
 
-            const imgData = canvas.toDataURL('image/jpeg', 1.0);
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
-            pdf.save(`Affiche-${clinicName.replace(/\s+/g, '-')}.pdf`);
+            const imgData = canvas.toDataURL("image/png");
+            const pdf = new jsPDF("p", "mm", "a4");
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+
+            pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+            pdf.save("saffi-qr-poster.pdf");
         } catch (error) {
-            console.error("PDF Error", error);
-            alert("Erreur lors de la génération du PDF");
+            console.error("Error generating PDF:", error);
         }
     };
 
     return (
-        <div className="h-[calc(100vh-140px)] flex gap-8 p-8">
-            {/* Left Column: Live Preview / Print Area */}
-            <div className="flex-1 bg-gray-100 border-2 border-black p-8 overflow-hidden flex items-center justify-center print:border-0 print:bg-white print:p-0 rounded-xl">
-                <div
-                    ref={printRef}
-                    className="print-content bg-white w-[210mm] h-[297mm] shadow-2xl flex flex-col items-center justify-between p-8 text-center scale-[0.45] origin-center print:scale-100 print:shadow-none"
-                >
-                    <div className="space-y-1">
-                        <h2 className="font-display font-black text-4xl uppercase tracking-tighter">Prenez votre ticket</h2>
-                        <p className="text-lg font-medium text-gray-500">Scannez pour rejoindre la file d'attente</p>
-                    </div>
-
-                    <div className="p-4 border-4 border-black bg-white">
-                        <QRCodeSVG
-                            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/client-portal/${clinicId || 'new'}`}
-                            size={250}
-                            level="H"
-                            includeMargin={false}
-                        />
-                    </div>
-
-                    <div className="w-full max-w-xl space-y-3">
-                        <Step number="1" icon={Camera} text="Ouvrez votre appareil photo" />
-                        <Step number="2" icon={Smartphone} text="Scannez le code" />
-                        <Step number="3" icon={Ticket} text="Prenez votre ticket virtuel" />
-                    </div>
-
-                    <div className="text-center">
-                        <h3 className="font-display font-black text-2xl uppercase mb-1">{clinicName}</h3>
-                        <p className="font-bold text-gray-500 text-xs">Powered by <span className="text-black">Saffi.</span></p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Right Column: Actions */}
-            <div className="w-80 flex flex-col gap-8 print:hidden">
-                <div>
-                    <h1 className="font-display font-black text-4xl uppercase tracking-tight mb-2">Borne QR</h1>
-                    <p className="text-gray-500 font-medium">Gérez l'affichage de votre QR code pour la salle d'attente.</p>
-                </div>
-
-                <div className="flex flex-col gap-4">
+        <div className="flex flex-col items-center gap-8">
+            {/* Actions Bar */}
+            <div className="flex w-full max-w-[210mm] items-center justify-between print:hidden">
+                <h2 className="text-2xl font-bold">Borne QR</h2>
+                <div className="flex gap-4">
                     <button
                         onClick={handlePrint}
-                        className="bg-[#2C2B57] text-white px-8 py-4 font-bold uppercase tracking-wider border-2 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-3 text-lg rounded-lg"
+                        className="flex items-center gap-2 border-2 border-black bg-white px-4 py-2 font-bold text-black shadow-[4px_4px_0px_0px_#000] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:bg-gray-50"
                     >
-                        <Printer className="h-6 w-6" /> Imprimer
+                        <Printer className="h-5 w-5" />
+                        Imprimer
                     </button>
                     <button
                         onClick={handleDownloadPDF}
-                        className="bg-white text-black px-8 py-4 font-bold uppercase tracking-wider border-2 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-3 text-lg rounded-lg"
+                        className="flex items-center gap-2 border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-[4px_4px_0px_0px_#000] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:bg-gray-900"
                     >
-                        <Download className="h-6 w-6" /> Télécharger PDF
+                        <Download className="h-5 w-5" />
+                        Télécharger PDF
                     </button>
                 </div>
+            </div>
 
-                <div className="mt-auto bg-blue-50 border-2 border-blue-200 p-6 rounded-xl">
-                    <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2">
-                        <Ticket className="h-5 w-5" /> Astuce
-                    </h3>
-                    <p className="text-blue-600 text-sm">
-                        Imprimez cette affiche et placez-la à l'entrée de votre cabinet pour que les patients puissent prendre leur ticket sans contact.
-                    </p>
+            {/* A4 Poster Preview */}
+            <div className="overflow-auto p-4 print:p-0 print:overflow-visible">
+                <div
+                    ref={posterRef}
+                    className="relative flex h-[297mm] w-[210mm] flex-col items-center justify-between border-2 border-black bg-white p-16 text-center shadow-2xl print:border-none print:shadow-none"
+                >
+                    {/* Header */}
+                    <div className="space-y-4">
+                        <h1 className="text-6xl font-black tracking-tighter">{clinicName}</h1>
+                        <p className="text-2xl font-medium text-gray-600">
+                            Bienvenue / Welcome
+                        </p>
+                    </div>
+
+                    {/* QR Code Section */}
+                    <div className="flex flex-col items-center gap-8">
+                        <div className="rounded-3xl border-4 border-black p-8">
+                            <QRCodeSVG value={qrUrl} size={300} level="H" />
+                        </div>
+                        <p className="max-w-md text-3xl font-bold leading-tight">
+                            Scannez ce code pour prendre votre ticket
+                        </p>
+                    </div>
+
+                    {/* Instructions */}
+                    <div className="w-full space-y-6 rounded-xl border-2 border-black bg-gray-50 p-8 text-left">
+                        <h3 className="text-2xl font-bold uppercase tracking-wider text-gray-400">
+                            Instructions
+                        </h3>
+                        <ol className="space-y-4 text-xl font-medium">
+                            <li className="flex items-center gap-4">
+                                <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-black text-white font-bold">
+                                    1
+                                </span>
+                                Ouvrez l'appareil photo de votre téléphone
+                            </li>
+                            <li className="flex items-center gap-4">
+                                <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-black text-white font-bold">
+                                    2
+                                </span>
+                                Visez le QR Code ci-dessus
+                            </li>
+                            <li className="flex items-center gap-4">
+                                <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-black text-white font-bold">
+                                    3
+                                </span>
+                                Suivez les instructions sur votre écran
+                            </li>
+                        </ol>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="text-sm font-bold text-gray-400">
+                        Powered by Saffi.
+                    </div>
                 </div>
             </div>
 
             {/* Print Styles */}
             <style jsx global>{`
-                @media print {
-                    @page {
-                        size: A4 portrait;
-                        margin: 0mm;
-                    }
-                    html, body {
-                        width: 210mm;
-                        height: 297mm;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        overflow: hidden !important;
-                    }
-                    
-                    /* Hide everything using visibility to preserve layout flow but hide content */
-                    body * {
-                        visibility: hidden;
-                    }
-
-                    /* Show only the print content and its children */
-                    .print-content, .print-content * {
-                        visibility: visible;
-                    }
-
-                    /* Position the print content to fill the page */
-                    .print-content {
-                        position: fixed;
-                        top: 0;
-                        left: 0;
-                        width: 210mm;
-                        height: 296mm; /* Slightly less than 297mm to prevent spillover */
-                        margin: 0;
-                        padding: 2rem !important;
-                        transform: none !important;
-                        box-shadow: none !important;
-                        border: none !important;
-                        overflow: hidden !important;
-                        z-index: 9999;
-                        background: white;
-                        page-break-after: avoid;
-                        page-break-inside: avoid;
-                    }
-
-                    /* Completely hide potential overlays */
-                    .next-error-overlay, #next-route-announcer {
-                        display: none !important;
-                    }
-                }
-            `}</style>
-        </div>
-    );
-}
-
-function Step({ number, icon: Icon, text }: { number: string, icon: any, text: string }) {
-    return (
-        <div className="flex items-center gap-4 bg-gray-50 p-4 border-4 border-black">
-            <div className="h-10 w-10 bg-black text-white rounded-full flex items-center justify-center font-black text-lg shrink-0">
-                {number}
-            </div>
-            <div className="flex items-center gap-3">
-                <Icon className="h-6 w-6" />
-                <p className="font-bold text-xl">{text}</p>
-            </div>
+        @media print {
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          body {
+            background: white;
+          }
+          /* Hide everything except the poster */
+          body > *:not(.print-content) {
+            display: none !important;
+          }
+          /* We need to target the layout wrapper to hide sidebar/header */
+          aside, header {
+            display: none !important;
+          }
+          /* Ensure the poster is visible and takes full page */
+          main {
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+            height: 100vh !important;
+          }
+        }
+      `}</style>
         </div>
     );
 }

@@ -3,16 +3,12 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Clock,
-    Calendar,
     Check,
     ChevronRight,
     Moon,
     Sun,
     Coffee,
     ArrowRight,
-    Users,
-    Wifi
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useRouter } from 'next/navigation';
@@ -20,14 +16,12 @@ import { createClient } from '@/utils/supabase/client';
 
 // --- Types ---
 type ConsultationDuration = 15 | 20 | 30 | 45;
-type Plan = 'digital' | 'connect';
 
 interface OnboardingData {
     duration: ConsultationDuration | null;
     openingTime: string;
     closingTime: string;
     hasLunchBreak: boolean;
-    plan: Plan | null;
 }
 
 // --- Save to Supabase ---
@@ -42,7 +36,7 @@ const saveStepData = async (data: Partial<OnboardingData>, isComplete: boolean =
             closing_time: data.closingTime,
             has_lunch_break: data.hasLunchBreak,
             clinic_id: user.user_metadata?.clinic_id, // Store clinic_id from metadata
-            plan: data.plan,
+            plan: 'connect', // Hardcoded to connect as requested
         };
 
         // Only set onboarding_completed to true on final step
@@ -71,7 +65,6 @@ export default function OnboardingWizard() {
         openingTime: '08:00',
         closingTime: '17:00',
         hasLunchBreak: true,
-        plan: null,
     });
 
     // Get doctor name on mount
@@ -104,8 +97,8 @@ export default function OnboardingWizard() {
         router.push('/dashboard');
     };
 
-    // Progress calculation
-    const progress = (step / 4) * 100;
+    // Progress calculation (Total steps = 3: Duration, Schedule, Success)
+    const progress = (step / 3) * 100;
 
     // Animation Variants
     const slideVariants = {
@@ -165,18 +158,8 @@ export default function OnboardingWizard() {
                             />
                         )}
                         {step === 3 && (
-                            <StepPlan
-                                key="step3"
-                                custom={direction}
-                                variants={slideVariants}
-                                value={formData.plan}
-                                onChange={(val: Plan) => setFormData({ ...formData, plan: val })}
-                                onNext={nextStep}
-                            />
-                        )}
-                        {step === 4 && (
                             <StepSuccess
-                                key="step4"
+                                key="step3"
                                 custom={direction}
                                 variants={slideVariants}
                                 doctorName={doctorName || "Docteur"}
@@ -186,10 +169,10 @@ export default function OnboardingWizard() {
                     </AnimatePresence>
                 </div>
 
-                {/* Footer info (Steps 1-3 only) */}
-                {step < 4 && (
+                {/* Footer info (Steps 1-2 only) */}
+                {step < 3 && (
                     <div className="bg-gray-50 border-t-2 border-black p-4 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
-                        Étape {step} sur 3 • Configuration Initiale
+                        Étape {step} sur 2 • Configuration Initiale
                     </div>
                 )}
             </div>
@@ -249,7 +232,7 @@ function StepDuration({ custom, variants, value, onChange, onNext }: any) {
                 onClick={onNext}
                 className={`
           mt-4 w-full py-4 border-2 border-black font-bold text-lg uppercase tracking-wider flex items-center justify-center gap-2
-          ${value ? 'bg-[#2C2B57] hover:bg-black shadow-[4px_4px_0px_0px_#000]' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}
+          ${value ? 'bg-[#2C2B57] text-white hover:bg-black shadow-[4px_4px_0px_0px_#000]' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}
         `}
             >
                 Suivant <ChevronRight />
@@ -307,7 +290,7 @@ function StepSchedule({ custom, variants, data, onChange, onNext }: any) {
                 >
                     <div className="flex items-center gap-3">
                         <div className={`p-2 border-2 border-black ${data.hasLunchBreak ? 'bg-[#2C2B57]' : 'bg-gray-200'}`}>
-                            <Coffee size={20} />
+                            <Coffee size={20} className={data.hasLunchBreak ? 'text-white' : 'text-black'} />
                         </div>
                         <div>
                             <p className="font-bold text-lg">Pause Déjeuner ?</p>
@@ -325,7 +308,7 @@ function StepSchedule({ custom, variants, data, onChange, onNext }: any) {
 
             <button
                 onClick={onNext}
-                className="mt-2 w-full py-4 bg-[#2C2B57] border-2 border-black font-bold text-lg uppercase tracking-wider shadow-[4px_4px_0px_0px_#000] hover:bg-black flex items-center justify-center gap-2"
+                className="mt-2 w-full py-4 bg-[#2C2B57] text-white border-2 border-black font-bold text-lg uppercase tracking-wider shadow-[4px_4px_0px_0px_#000] hover:bg-black flex items-center justify-center gap-2"
             >
                 Suivant <ChevronRight />
             </button>
@@ -333,71 +316,7 @@ function StepSchedule({ custom, variants, data, onChange, onNext }: any) {
     );
 }
 
-
-// --- STEP 3: Plan ---
-function StepPlan({ custom, variants, value, onChange, onNext }: any) {
-    const options: { val: Plan; label: string; desc: string, icon: any }[] = [
-        { val: 'digital', label: "Digital", desc: "QR Code & File d'attente", icon: <Users size={24} /> },
-        { val: 'connect', label: "Connect", desc: "TV & Annonces vocales", icon: <Wifi size={24} /> },
-    ];
-
-    return (
-        <motion.div
-            custom={custom}
-            variants={variants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="flex flex-col gap-6"
-        >
-            <div className="space-y-2">
-                <h2 className="font-display text-4xl font-bold tracking-tight">Votre Plan.</h2>
-                <p className="text-gray-500 font-medium">Choisissez le plan qui vous convient.</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-                {options.map((opt) => (
-                    <motion.button
-                        key={opt.val}
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => onChange(opt.val)}
-                        className={`
-              p-6 border-2 border-black text-left flex flex-col gap-2 transition-all
-              ${value === opt.val
-                                ? 'bg-black text-white shadow-[4px_4px_0px_0px_#2C2B57]'
-                                : 'bg-white hover:bg-gray-50 shadow-[4px_4px_0px_0px_#000]'
-                            }
-            `}
-                    >
-                        <div className={`p-2 border-2 border-black w-fit ${value === opt.val ? 'bg-[#2C2B57] text-white' : 'bg-gray-200'}`}>
-                            {opt.icon}
-                        </div>
-                        <span className="text-2xl font-black font-display">{opt.label}</span>
-                        <span className={`text-xs font-bold uppercase ${value === opt.val ? 'text-gray-200' : 'text-gray-500'}`}>
-                            {opt.desc}
-                        </span>
-                    </motion.button>
-                ))}
-            </div>
-
-            <button
-                disabled={!value}
-                onClick={onNext}
-                className={`
-          mt-4 w-full py-4 border-2 border-black font-bold text-lg uppercase tracking-wider flex items-center justify-center gap-2
-          ${value ? 'bg-[#2C2B57] hover:bg-black shadow-[4px_4px_0px_0px_#000]' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}
-        `}
-            >
-                Suivant <ChevronRight />
-            </button>
-        </motion.div>
-    );
-}
-
-
-// --- STEP 4: SUCCESS ---
+// --- STEP 3: SUCCESS ---
 function StepSuccess({ custom, variants, doctorName, onComplete }: any) {
     const qrValue = `https://saffi.tn/join/${doctorName.replace(/\s+/g, '-').toLowerCase()}`;
 

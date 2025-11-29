@@ -18,16 +18,20 @@
   --color-saffi-green: #10B981;
   --color-saffi-dark: #0f172a;
 
-  --font-sans: var(--font-bricolage);
-  --font-display: var(--font-giniloh);
-  --font-body: var(--font-inter);
+  --font-sans: var(--font-ordinary);
+  --font-display: var(--font-ordinary);
+  --font-body: var(--font-ordinary);
 }
 
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
-  font-family: var(--font-sans);
+  font-family: var(--font-ordinary), sans-serif;
   overflow-x: hidden;
+}
+
+html {
+  font-family: var(--font-ordinary), sans-serif;
 }
 
 @utility neo-shadow {

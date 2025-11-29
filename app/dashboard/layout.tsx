@@ -1,286 +1,199 @@
-"use client"
+"use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-    LayoutDashboard,
-    BarChart3,
-    QrCode,
-    Settings,
-    LogOut,
-    Menu,
-    Tv,
-    Volume2,
-    VolumeX,
-    Cast,
-    Clock,
-    User as UserIcon, // Renamed to avoid conflict with `User` type
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useState, useEffect, createContext, useContext } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { Toaster } from "sonner";
-import { User } from "@supabase/supabase-js";
 
-// --- Types ---
-
-interface Profile {
-    onboarding_completed: boolean;
-    plan: string;
-}
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { LayoutDashboard, QrCode, Settings, LogOut, User, Monitor, Plus, ChevronLeft, ChevronRight, UserCircle, TrendingUp } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface DashboardContextType {
-    clinicName: string;
-    setClinicName: (name: string) => void;
-    clinicId: string;
-    setClinicId: (id: string) => void;
-    googleReviewLink: string;
-    setGoogleReviewLink: (link: string) => void;
-    isVoiceEnabled: boolean;
-    setIsVoiceEnabled: (enabled: boolean) => void;
     primaryColor: string;
-    setPrimaryColor: (color: string) => void;
-    plan: string | null;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
 
-export function useDashboard() {
-    const ctx = useContext(DashboardContext);
-    if (!ctx) throw new Error("useDashboard must be used within DashboardProvider");
-    return ctx;
-}
+export const useDashboard = () => {
+    const context = useContext(DashboardContext);
+    if (!context) {
+        throw new Error("useDashboard must be used within a DashboardProvider");
+    }
+    return context;
+};
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
-    const router = useRouter();
+export default function DashboardLayout({
+    children,
+}: {
+    children: React.ReactNode;
+}) {
     const pathname = usePathname();
+    const [time, setTime] = useState<Date | null>(null);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [primaryColor, setPrimaryColor] = useState("#2C2B57"); // Default color
 
-    const [clinicName, setClinicName] = useState<string>("");
-    const [clinicId, setClinicId] = useState<string>("");
-    const [googleReviewLink, setGoogleReviewLink] = useState<string>("");
-    const [isVoiceEnabled, setIsVoiceEnabled] = useState<boolean>(true);
-    const [primaryColor, setPrimaryColor] = useState<string>("#2C2B57");
-    const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(true);
-    const [currentTime, setCurrentTime] = useState<string>(
-        new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-    );
-    const [plan, setPlan] = useState<string | null>(null);
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [currentProfile, setCurrentProfile] = useState<Profile | null>(null);
-
-    // Load persisted UI state on mount
     useEffect(() => {
-        const saved = localStorage.getItem("saffi_dashboard_settings");
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            if (parsed.clinicName) setClinicName(parsed.clinicName);
-            if (parsed.clinicId) setClinicId(parsed.clinicId);
-            if (parsed.googleReviewLink) setGoogleReviewLink(parsed.googleReviewLink);
-            if (parsed.isVoiceEnabled !== undefined) setIsVoiceEnabled(parsed.isVoiceEnabled);
-        }
-    }, []);
-
-    // Fetch user metadata and check plan/onboarding status
-    useEffect(() => {
-        let mounted = true;
-
-        const fetchUserAndProfile = async () => {
-            const supabase = createClient();
-            const { data: { user } } = await supabase.auth.getUser();
-
-            if (!user) {
-                router.push("/login");
-                return;
-            }
-
-            setCurrentUser(user);
-
-            const { data: profile, error } = await supabase
-                .from("profiles")
-                .select("onboarding_completed, plan")
-                .eq("id", user.id)
-                .single();
-
-            if (error) {
-                console.error("Error fetching profile:", error);
-                // Handle error appropriately, maybe redirect to an error page or show a message
-                return;
-            }
-
-            if (mounted) {
-                setCurrentProfile(profile);
-                setPlan(profile.plan);
-
-                if (!profile || profile.onboarding_completed === false || !profile.plan) {
-                    router.push("/onboarding");
-                    return;
-                }
-
-                // Redirect based on plan if user is on the root dashboard page
-                if (pathname === '/dashboard' || pathname === '/dashboard/') {
-                    if (profile.plan === 'connect') {
-                        router.push('/dashboard/connect');
-                    }
-                }
-
-                const meta = user.user_metadata || {};
-                const name = meta.clinic_name || "";
-                const id = meta.clinic_id || "";
-                if (name) setClinicName(name);
-                if (id) setClinicId(id);
-
-                // Persist to localStorage for fast reloads
-                const current = JSON.parse(localStorage.getItem("saffi_dashboard_settings") || "{}");
-                localStorage.setItem(
-                    "saffi_dashboard_settings",
-                    JSON.stringify({ ...current, clinicName: name, clinicId: id })
-                );
-                // Also store clinicName for TV mode queue state
-                const queueState = JSON.parse(localStorage.getItem("saffi_queue_state") || "{}");
-                localStorage.setItem(
-                    "saffi_queue_state",
-                    JSON.stringify({ ...queueState, clinicName: name })
-                );
-            }
-        };
-
-        fetchUserAndProfile();
-
-        return () => { mounted = false; };
-
-    }, [router, pathname]);
-
-    // Persist UI state changes
-    useEffect(() => {
-        const payload = { clinicName, clinicId, googleReviewLink, isVoiceEnabled };
-        localStorage.setItem("saffi_dashboard_settings", JSON.stringify(payload));
-    }, [clinicName, clinicId, googleReviewLink, isVoiceEnabled]);
-
-
-    // Clock ticker
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setCurrentTime(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
-        }, 60000);
+        setTime(new Date());
+        const timer = setInterval(() => setTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
 
-    const handleOpenTV = () => window.open("/tv", "_blank");
+    useEffect(() => {
+        const fetchProfileData = async () => {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (user) {
+                const { data: profile, error } = await supabase
+                    .from("profiles")
+                    .select("primary_color")
+                    .eq("id", user.id)
+                    .single();
+
+                if (profile) {
+                    if (profile.primary_color) {
+                        setPrimaryColor(profile.primary_color);
+                    }
+                } else if (error) {
+                    console.error("Error fetching profile for dashboard layout:", JSON.stringify(error, null, 2));
+                }
+            }
+        };
+
+        fetchProfileData();
+    }, []);
+
+    const menuItems = [
+        {
+            name: "Accueil",
+            href: "/dashboard/accueil",
+            icon: LayoutDashboard,
+            active: pathname === "/dashboard/accueil",
+        },
+        {
+            name: "Analytiques",
+            href: "/dashboard/analytics",
+            icon: TrendingUp,
+            active: pathname === "/dashboard/analytics",
+        },
+        {
+            name: "Borne QR",
+            href: "/dashboard/qr",
+            icon: QrCode,
+            active: pathname === "/dashboard/qr",
+        },
+        {
+            name: "Réglages",
+            href: "/dashboard/settings",
+            icon: Settings,
+            active: pathname === "/dashboard/settings",
+        },
+    ];
 
     return (
-        <DashboardContext.Provider
-            value={{
-                clinicName,
-                setClinicName,
-                clinicId,
-                setClinicId,
-                googleReviewLink,
-                setGoogleReviewLink,
-                isVoiceEnabled,
-                setIsVoiceEnabled,
-                primaryColor,
-                setPrimaryColor,
-                plan,
-            }}
-        >
-            <Toaster position="top-right" richColors />
-            <div className="min-h-screen bg-white flex font-sans text-black selection:bg-black selection:text-white" style={{ '--color-primary': primaryColor } as React.CSSProperties}>
-                {/* Sidebar */}
-                <aside
-                    className={cn(
-                        "bg-white border-r-2 border-black flex flex-col fixed h-full z-20 transition-all duration-300",
-                        sidebarCollapsed ? "w-20" : "w-72"
-                    )}
-                >
-                    <div
-                        className={cn(
-                            "h-24 flex items-center px-6 border-b-2 border-black bg-white",
-                            sidebarCollapsed ? "justify-center" : "justify-between"
-                        )}
-                    >
-                        {!sidebarCollapsed && (
-                            <span className="font-display font-black text-4xl tracking-tighter uppercase text-black">
-                                Saffi.
-                            </span>
-                        )}
+        <DashboardContext.Provider value={{ primaryColor }}>
+            <div className="flex min-h-screen bg-white font-sans text-black" style={{ '--color-primary': primaryColor } as React.CSSProperties}>
+                {/* Sidebar (Fixed Left) */}
+                <aside className={cn(
+                    "fixed left-0 top-0 z-40 h-screen border-r-2 border-black bg-white p-6 hidden print:hidden md:flex md:flex-col transition-all duration-300",
+                    sidebarCollapsed ? "w-20" : "w-64"
+                )}>
+                    {/* Logo & Toggle */}
+                    <div className="mb-10 flex items-center justify-between">
+                        {!sidebarCollapsed && <h1 className="text-3xl font-bold tracking-tight">Saffi.</h1>}
                         <button
                             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                            className="p-2 hover:bg-gray-100 rounded border-2 border-transparent hover:border-black transition-all"
+                            className="p-2 hover:bg-gray-100 border-2 border-black rounded-none transition-colors"
                         >
-                            <Menu className="h-6 w-6" />
+                            {sidebarCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
                         </button>
                     </div>
-                    <nav className="flex-1 py-8 px-4 space-y-3">
 
-                        <SidebarItem
-                                href="/dashboard/connect"
-                                icon={Cast}
-                                label="Tableau de Bord"
-                                isActive={pathname.startsWith("/dashboard/connect")}
-                                collapsed={sidebarCollapsed}
-                            />
-
-                        <SidebarItem href="/dashboard/analytics" icon={BarChart3} label="Statistiques" isActive={pathname === "/dashboard/analytics"} collapsed={sidebarCollapsed} />
-                        <SidebarItem href="/dashboard/qr" icon={QrCode} label="Borne QR" isActive={pathname === "/dashboard/qr"} collapsed={sidebarCollapsed} />
-                        <div className="pt-4 mt-4 border-t-2 border-black/10">
-                            <SidebarItem href="/dashboard/settings" icon={Settings} label="Réglages" isActive={pathname === "/dashboard/settings"} collapsed={sidebarCollapsed} />
-                        </div>
+                    {/* Menu Items */}
+                    <nav className="flex-1 space-y-4">
+                        {menuItems.map((item) => (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                className={cn(
+                                    "flex items-center gap-3 rounded-none border-2 px-4 py-3 text-sm font-bold transition-all",
+                                    item.active
+                                        ? "border-black bg-black text-white shadow-[4px_4px_0px_0px_#000]"
+                                        : "border-transparent bg-transparent text-black hover:border-black hover:bg-gray-50",
+                                    sidebarCollapsed && "justify-center"
+                                )}
+                                title={sidebarCollapsed ? item.name : undefined}
+                            >
+                                <item.icon className="h-5 w-5" />
+                                {!sidebarCollapsed && item.name}
+                            </Link>
+                        ))}
                     </nav>
+
+                    {/* User Profile - Clickable */}
+                    <Link
+                        href="/dashboard/profile"
+                        className="mt-auto border-t-2 border-black pt-6 hover:bg-gray-50 transition-colors cursor-pointer"
+                    >
+                        <div className={cn(
+                            "flex items-center gap-3",
+                            sidebarCollapsed && "justify-center"
+                        )}>
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-gray-100">
+                                <User className="h-5 w-5" />
+                            </div>
+                            {!sidebarCollapsed && (
+                                <div className="flex-1 overflow-hidden">
+                                    <p className="truncate text-sm font-bold">Dr. Malek</p>
+                                    <p className="truncate text-xs text-gray-500">Admin</p>
+                                </div>
+                            )}
+                        </div>
+                    </Link>
                 </aside>
 
                 {/* Main Content */}
-                <div className={cn("flex-1 flex flex-col min-h-screen transition-all duration-300", sidebarCollapsed ? "ml-20" : "ml-72")}>
+                <div className={cn(
+                    "flex-1 transition-all duration-300",
+                    sidebarCollapsed ? "md:ml-20" : "md:ml-64"
+                )}>
                     {/* Top Bar */}
-                    <header className="h-24 bg-white border-b-2 border-black flex items-center justify-between px-8 sticky top-0 z-10">
-                        <div className="flex items-center gap-6">
-                            <h2 className="font-display font-black text-2xl uppercase tracking-tight">{clinicName}</h2>
+                    <header className="sticky top-0 z-30 flex h-24 items-center justify-between border-b-2 border-black bg-white px-8 print:hidden">
+                        {/* Left: Cabinet Name */}
+                        <div className="flex flex-col justify-center">
+                            <h1 className="text-2xl font-black uppercase tracking-tight leading-none">
+                                Cabinet Dr. Malek
+                            </h1>
+                            <p className="text-sm font-medium text-gray-500 mt-1">
+                                Médecine Générale
+                            </p>
                         </div>
-                        <div className="flex items-center gap-6">
-                            <div className="text-lg font-bold text-gray-600 flex items-center gap-2">
-                                <Clock className="h-5 w-5" />
-                                {currentTime}
+
+                        {/* Center: SMS Count */}
+                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transform">
+                            <div className="flex items-center gap-3 rounded-full border-2 border-black bg-gray-100 px-6 py-2 font-bold text-lg shadow-[4px_4px_0px_0px_#000]">
+                                <span className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
+                                <span>0 SMS</span>
                             </div>
-                            {/* TV Button */}
-                            <button
-                                onClick={handleOpenTV}
-                                className="bg-[var(--color-primary)] text-white px-6 py-3 font-black uppercase tracking-wider border-2 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none flex items-center gap-3 transition-all"
-                            >
-                                <Tv className="h-6 w-6" /> TV Mode
-                            </button>
-                            {/* Simuler Patient Scan */}
-                            <button
-                                onClick={() => window.open(`/client-portal/${clinicId}`, "_blank")}
-                                className="bg-[#2C2B57] text-white px-6 py-3 font-black uppercase tracking-wider border-2 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none flex items-center gap-3 transition-all ml-2"
-                            >
-                                <UserIcon className="h-6 w-6" /> Simuler Patient
-                            </button>
+                        </div>
+
+                        {/* Right: Date & Time */}
+                        <div className="flex flex-col items-end justify-center">
+                            <div className="text-3xl font-black tracking-tight leading-none">
+                                {time ? time.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "--:--"}
+                            </div>
+                            <div className="text-lg font-bold text-gray-500 leading-none mt-1">
+                                {time ? time.toLocaleDateString("fr-FR", { weekday: 'long', day: 'numeric', month: 'long' }) : "..."}
+                            </div>
                         </div>
                     </header>
 
                     {/* Page Content */}
-                    <main className="flex-1 bg-white p-8">{children}</main>
+                    <main className="min-h-[calc(100vh-64px)] bg-gray-50/50 p-6 print:p-0 print:bg-white">
+                        {children}
+                    </main>
                 </div>
             </div>
         </DashboardContext.Provider>
-    );
-}
-
-function SidebarItem({ href, icon: Icon, label, isActive, collapsed }: { href: string; icon: any; label: string; isActive: boolean; collapsed: boolean }) {
-    return (
-        <Link
-            href={href}
-            className={cn(
-                "flex items-center gap-4 px-6 py-4 font-bold transition-all border-2",
-                collapsed ? "justify-center px-2" : "",
-                isActive
-                    ? "bg-black text-white border-black shadow-[4px_4px_0px_0px_#000]"
-                    : "bg-white text-gray-500 border-transparent hover:border-black hover:bg-gray-50 hover:text-black"
-            )}
-            title={collapsed ? label : undefined}
-        >
-            <Icon className={cn("h-6 w-6 stroke-[2.5]", isActive ? "text-white" : "text-current")} />
-            {!collapsed && <span className="uppercase tracking-wide text-sm">{label}</span>}
-        </Link>
     );
 }
