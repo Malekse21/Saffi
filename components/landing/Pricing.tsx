@@ -3,7 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Check, Zap, Package } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 const plans = [
     {
@@ -23,22 +23,22 @@ const plans = [
         ]
     },
     {
-        id: 'semester',
-        name: 'Semestriel',
-        price: '59',
+        id: 'quarter',
+        name: 'Trimestriel', // The Middle Plan
+        price: '59', // 179 / 3 = ~59.66 TND
         period: '/ mois',
-        billed: 'Payez 359 TND une fois',
-        savings: 'Économisez 55 TND',
-        theme: 'white', // Standard White
+        billed: 'Payez 179 TND tous les 3 mois',
+        savings: 'Option Équilibrée',
+        theme: 'white',
         popular: false,
         gifts: [
             { name: 'Support QR Plexi', image: '/images/gift-stand.png' }
         ],
         features: [
             'Tout le pack Mensuel',
-            'Installation Assistée',
-            '300 SMS Gratuits / mois',
-            'Cadeau Physique inclus 📦'
+            '250 SMS Gratuits / mois',
+            'Renouvellement automatique',
+            'Cadeau Physique inclus 📦' // Highlight this
         ]
     },
     {
@@ -56,10 +56,10 @@ const plans = [
             { name: 'Stylo Premium', image: '/images/gift-pen.png' }
         ],
         features: [
-            'Tout le pack Semestriel',
+            'Tout le pack Trimestriel',
             'Support VIP Prioritaire',
             '300 SMS Gratuits / mois',
-            'Pack "Ambassadeur" envoyé 🎁'
+            'Pack "Ambassadeur" offert 🎁'
         ]
     }
 ];
@@ -91,7 +91,7 @@ export default function PricingSection() {
 
                 {/* Footer Note */}
                 <p className="text-center mt-12 text-sm text-gray-500 font-mono">
-                    * Les cadeaux sont livrés sous 48h après validation du paiement.
+                    * Les cadeaux (Plan Annuel) sont livrés sous 48h après validation.
                 </p>
             </div>
         </section>
@@ -121,7 +121,7 @@ function PricingCard({ plan, index }: { plan: any, index: number }) {
                 </div>
             )}
             {plan.savings && !plan.popular && (
-                <div className="absolute -top-4 right-4 bg-green-100 text-green-800 border-2 border-black px-3 py-1 text-xs font-bold shadow-[2px_2px_0px_0px_#000]">
+                <div className="absolute -top-4 right-4 bg-blue-100 text-blue-900 border-2 border-black px-3 py-1 text-xs font-bold shadow-[2px_2px_0px_0px_#000]">
                     {plan.savings}
                 </div>
             )}
@@ -151,10 +151,6 @@ function PricingCard({ plan, index }: { plan: any, index: number }) {
 
                         {/* Image Container */}
                         <div className="h-32 w-full relative flex items-center justify-center gap-2">
-                            {/* 
-                  NOTE: Ensure your PNGs are in /public/images/ 
-                  The prompt asked for specific items per plan.
-               */}
                             {plan.gifts.map((gift: any, i: number) => (
                                 <motion.div
                                     key={i}
@@ -175,9 +171,10 @@ function PricingCard({ plan, index }: { plan: any, index: number }) {
                         </p>
                     </div>
                 ) : (
-                    <div className="mb-8 h-40 flex items-center justify-center border-2 border-transparent">
-                        <p className="text-gray-400 text-sm font-mono text-center">
-                            Pas de matériel inclus.<br />Format 100% Digital.
+                    <div className="mb-8 h-40 flex items-center justify-center border-2 border-dashed border-gray-200 bg-gray-50 opacity-50">
+                        <p className="text-gray-400 text-sm font-mono text-center leading-relaxed">
+                            Format 100% Digital.<br />
+                            <span className="text-xs">(Pas de matériel inclus)</span>
                         </p>
                     </div>
                 )}
