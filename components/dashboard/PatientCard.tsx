@@ -1,8 +1,6 @@
 "use client";
 
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { GripVertical } from 'lucide-react';
+
 import { cn } from "@/lib/utils";
 
 export interface Patient {
@@ -13,6 +11,7 @@ export interface Patient {
     type: 'walk-in' | 'rdv';
     appointmentTime?: string;
     isPriority?: boolean;
+    ticketNumber?: string;
     position?: number;
 }
 
@@ -32,59 +31,42 @@ export function PatientCard({
     const isRdv = patient.type === 'rdv';
     const isAway = patient.status === 'away';
 
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-        isDragging,
-    } = useSortable({ id: patient.id });
-
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.5 : 1,
-    };
-
     return (
         <div
-            ref={setNodeRef}
-            style={style}
             className={cn(
-                "relative border-2 border-black p-6 transition-all bg-white",
-                isActive ? "shadow-[6px_6px_0px_0px_#000]" : "shadow-[4px_4px_0px_0px_#000]",
-                isAway && "opacity-60"
+                "relative border-2 border-black p-6 transition-all",
+                isActive ? "shadow-[6px_6px_0px_0px_#000] bg-white" : "shadow-[4px_4px_0px_0px_#000]",
+                isAway ? "bg-gray-200" : "bg-white"
             )}
         >
             <div className="flex items-start gap-4">
-                {/* Drag Handle */}
-                {showDragHandle && (
-                    <button
-                        className="cursor-grab active:cursor-grabbing p-2 hover:bg-gray-100 transition-colors"
-                        {...attributes}
-                        {...listeners}
-                    >
-                        <GripVertical className="h-5 w-5 text-gray-400" />
-                    </button>
-                )}
-
                 {/* Patient Info */}
                 <div className="flex-1">
                     {/* Ticket Number Badge */}
                     <div className="flex items-center gap-3 mb-3">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-black bg-black text-white font-bold text-sm">
-                            #{patient.position || 1}
+                        <span className={cn(
+                            "inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-black font-bold text-sm",
+                            isAway ? "bg-gray-400 text-white" : "bg-black text-white"
+                        )}>
+                            {patient.ticketNumber || patient.position || '#'}
                         </span>
                         {isRdv && (
                             <span className="inline-flex items-center gap-1 rounded-full border-2 border-black bg-purple-500 px-3 py-1 text-xs font-bold text-white">
                                 RDV
                             </span>
                         )}
+                        {isAway && (
+                            <span className="inline-flex items-center gap-1 rounded-full border-2 border-black bg-gray-500 px-3 py-1 text-xs font-bold text-white uppercase">
+                                OUT
+                            </span>
+                        )}
                     </div>
 
                     {/* Name */}
-                    <h3 className="text-xl font-bold mb-2">{patient.name}</h3>
+                    <h3 className={cn(
+                        "text-xl font-bold mb-2",
+                        isAway && "text-gray-500"
+                    )}>{patient.name}</h3>
 
                     {/* Details */}
                     <div className="space-y-1 text-sm font-medium text-gray-600">

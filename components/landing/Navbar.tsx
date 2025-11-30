@@ -16,7 +16,7 @@ const Navbar: React.FC = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between items-center h-20">
                     <div className="flex-shrink-0 flex items-center gap-2">
-                        <Link href="/" className="relative h-12 w-36 block">
+                        <Link href="/" className="relative h-20 w-60 block">
                             <Image
                                 src="/media/black_logo.png"
                                 alt="Saffi Logo"

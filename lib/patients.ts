@@ -10,6 +10,7 @@ export interface Patient {
     arrival_time: string;
     rdv_time?: string;
     phone?: string;
+    position: number;
     created_at: string;
     updated_at: string;
 }
@@ -75,10 +76,34 @@ export async function getPatients(): Promise<Patient[]> {
         .from('patients')
         .select('*')
         .eq('user_id', user.id)
+        .order('position', { ascending: true })
         .order('created_at', { ascending: true });
 
     if (error) throw error;
     return data || [];
+}
+
+/**
+ * Get the next position for a new patient
+ */
+async function getNextPosition(userId: string): Promise<number> {
+    const supabase = createClient();
+
+    const { data, error } = await supabase
+        .from('patients')
+        .select('position')
+        .eq('user_id', userId)
+        .eq('status', 'waiting')
+        .order('position', { ascending: false })
+        .limit(1)
+        .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows found"
+        console.error('Error getting next position:', error);
+        return 0;
+    }
+
+    return (data?.position || 0) + 1;
 }
 
 /**
@@ -96,6 +121,7 @@ export async function addPatient(
     if (!user) throw new Error('User not authenticated');
 
     const ticketNumber = await getNextTicketNumber();
+    const position = await getNextPosition(user.id);
 
     const patientData: any = {
         user_id: user.id,
@@ -104,6 +130,7 @@ export async function addPatient(
         status: 'waiting',
         type,
         phone: phone || null,
+        position
     };
 
     if (rdvTime) {
@@ -134,12 +161,30 @@ export async function addPatientByClinicId(
 
     console.log('Step 1: Looking up clinic with ID:', clinicId);
 
-    // First, get the user_id from the profiles table using clinic_id
-    const { data: profile, error: profileError } = await supabase
+    // First, try to find by slug, then by clinic_id
+    let profile = null;
+    let profileError = null;
+
+    // Try slug first (for new system with human-readable URLs)
+    const { data: slugProfile, error: slugError } = await supabase
         .from('profiles')
         .select('id')
-        .eq('clinic_id', clinicId)
+        .eq('slug', clinicId)
         .maybeSingle();
+
+    if (slugProfile) {
+        profile = slugProfile;
+    } else {
+        // Fallback to clinic_id (UUID) for backward compatibility
+        const { data: uuidProfile, error: uuidError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('clinic_id', clinicId)
+            .maybeSingle();
+
+        profile = uuidProfile;
+        profileError = uuidError;
+    }
 
     console.log('Step 2: Profile lookup result:', { profile, profileError });
 
@@ -149,7 +194,7 @@ export async function addPatientByClinicId(
     }
 
     if (!profile) {
-        console.error('No profile found with clinic_id:', clinicId);
+        console.error('No profile found with slug or clinic_id:', clinicId);
         throw new Error('Cabinet introuvable. Veuillez vérifier le QR code ou contactez le cabinet.');
     }
 
@@ -194,6 +239,7 @@ export async function addPatientByClinicId(
         .eq('user_id', userId);
 
     const ticketNumber = nextNumber.toString();
+    const position = await getNextPosition(userId);
 
     const patientData: any = {
         user_id: userId,
@@ -202,6 +248,7 @@ export async function addPatientByClinicId(
         status: 'waiting',
         type,
         phone: phone || null,
+        position
     };
 
     if (rdvTime) {
@@ -247,6 +294,23 @@ export async function updatePatientStatus(
 }
 
 /**
+ * Reorder patients in the queue
+ */
+export async function reorderPatients(patientIds: string[]): Promise<void> {
+    const supabase = createClient();
+
+    // We update each patient's position based on their index in the array
+    // We use a loop for now as Supabase JS client doesn't support bulk update easily
+    for (let i = 0; i < patientIds.length; i++) {
+        const id = patientIds[i];
+        await supabase
+            .from('patients')
+            .update({ position: i + 1 })
+            .eq('id', id);
+    }
+}
+
+/**
  * Delete a patient
  */
 export async function deletePatient(patientId: string): Promise<void> {
@@ -284,7 +348,8 @@ export async function getActivePatient(): Promise<Patient | null> {
  * Subscribe to real-time patient updates
  */
 export function subscribeToPatients(
-    callback: (payload: any) => void
+    callback: (payload: any) => void,
+    onStatusChange?: (status: string) => void
 ): () => void {
     const supabase = createClient();
 
@@ -299,7 +364,12 @@ export function subscribeToPatients(
             },
             callback
         )
-        .subscribe();
+        .subscribe((status) => {
+            console.log('Realtime subscription status:', status);
+            if (onStatusChange) {
+                onStatusChange(status);
+            }
+        });
 
     // Return unsubscribe function
     return () => {

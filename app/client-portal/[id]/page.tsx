@@ -86,6 +86,93 @@ export default function ClientPortalPage() {
         return data.length + 1; // Position is count of earlier patients + 1
     };
 
+    // Fetch clinic user_id on mount
+    useEffect(() => {
+        const fetchClinicUserId = async () => {
+            const supabase = createClient();
+            const { data } = await supabase
+                .from('queue_settings')
+                .select('user_id')
+                .eq('clinic_id', clinicId)
+                .single();
+
+            if (data) {
+                setClinicUserId(data.user_id);
+            }
+        };
+
+        fetchClinicUserId();
+    }, [clinicId]);
+
+    // Restore session on mount
+    useEffect(() => {
+        const restoreSession = async () => {
+            const savedSession = localStorage.getItem(`saffi_patient_session_${clinicId}`);
+            if (!savedSession) return;
+
+            try {
+                const { patientId: savedPatientId } = JSON.parse(savedSession);
+                if (!savedPatientId) return;
+
+                const supabase = createClient();
+                const { data: patient, error } = await supabase
+                    .from('patients')
+                    .select('*')
+                    .eq('id', savedPatientId)
+                    .single();
+
+                if (error || !patient) {
+                    // Invalid session or patient deleted
+                    localStorage.removeItem(`saffi_patient_session_${clinicId}`);
+                    return;
+                }
+
+                // Restore state
+                setPatientId(patient.id);
+                setTicketNumber(patient.ticket_number);
+                setStatus(patient.status);
+                setUserName(patient.name);
+                setUserPhone(patient.phone || "");
+                setIsAway(patient.status === 'away');
+                setHasSubmittedInfo(true);
+
+                // Calculate initial position if waiting
+                if (patient.status === 'waiting' || patient.status === 'away') {
+                    const pos = await calculatePosition(patient.user_id, patient.created_at);
+                    setPosition(pos);
+                }
+            } catch (e) {
+                console.error("Error restoring session:", e);
+                localStorage.removeItem(`saffi_patient_session_${clinicId}`);
+            }
+        };
+
+        restoreSession();
+    }, [clinicId]);
+
+    // Auto-end session 1 minute after completion
+    useEffect(() => {
+        if (status === 'completed') {
+            const timer = setTimeout(() => {
+                // Clear session
+                localStorage.removeItem(`saffi_patient_session_${clinicId}`);
+
+                // Attempt to close the window
+                try {
+                    window.close();
+                } catch (e) {
+                    console.error("Could not close window", e);
+                }
+
+                // Fallback: Redirect to blank page to ensure they leave the queue
+                // This handles cases where window.close() is blocked by the browser
+                window.location.href = "about:blank";
+            }, 60000); // 1 minute
+
+            return () => clearTimeout(timer);
+        }
+    }, [status, clinicId]);
+
     const handleSubmitInfo = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -125,6 +212,12 @@ export default function ClientPortalPage() {
 
             console.log('Patient added successfully:', patient);
 
+            // Save session
+            localStorage.setItem(`saffi_patient_session_${clinicId}`, JSON.stringify({
+                patientId: patient.id,
+                timestamp: Date.now()
+            }));
+
             setPatientId(patient.id);
             setTicketNumber(patient.ticket_number);
             setStatus(patient.status);
@@ -149,24 +242,6 @@ export default function ClientPortalPage() {
             setIsSubmitting(false);
         }
     };
-
-    // Fetch clinic user_id on mount
-    useEffect(() => {
-        const fetchClinicUserId = async () => {
-            const supabase = createClient();
-            const { data } = await supabase
-                .from('queue_settings')
-                .select('user_id')
-                .eq('clinic_id', clinicId)
-                .single();
-
-            if (data) {
-                setClinicUserId(data.user_id);
-            }
-        };
-
-        fetchClinicUserId();
-    }, [clinicId]);
 
     // Subscribe to real-time updates for this specific patient
     useEffect(() => {
@@ -241,16 +316,7 @@ export default function ClientPortalPage() {
         };
     }, [patientId, hasSubmittedInfo, status]);
 
-    // Auto-open review gate after 10 seconds of joining the queue
-    useEffect(() => {
-        if (!hasSubmittedInfo) return;
 
-        const timer = setTimeout(() => {
-            setIsReviewGateOpen(true);
-        }, 10000); // 10 seconds
-
-        return () => clearTimeout(timer);
-    }, [hasSubmittedInfo]);
 
     const toggleAway = async () => {
         if (!patientId) return;
@@ -270,9 +336,44 @@ export default function ClientPortalPage() {
 
     const isServing = status === 'active';
 
-    // Calculate estimated time (5 minutes per person in queue)
-    const estimatedMinutes = position ? position * 5 : 0;
-    const estimatedTime = new Date(Date.now() + estimatedMinutes * 60000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    // Initial estimated time in minutes
+    const [initialEstimatedMinutes, setInitialEstimatedMinutes] = useState<number>(0);
+    // Current remaining minutes
+    const [remainingMinutes, setRemainingMinutes] = useState<number>(0);
+    // Track previous position to avoid resetting timer on re-renders
+    const prevPositionRef = useRef<number | null>(null);
+
+    // Update estimates when position changes
+    useEffect(() => {
+        if (position !== null && position !== prevPositionRef.current) {
+            const minutes = position * 5;
+
+            // Only update if position actually changed
+            setRemainingMinutes(minutes);
+
+            // Update initial estimate if this is a new max (or first run)
+            if (minutes > initialEstimatedMinutes) {
+                setInitialEstimatedMinutes(minutes);
+            }
+
+            prevPositionRef.current = position;
+        }
+    }, [position, initialEstimatedMinutes]);
+
+    // Countdown timer
+    useEffect(() => {
+        if (remainingMinutes <= 0) return;
+
+        const timer = setInterval(() => {
+            setRemainingMinutes(prev => Math.max(0, prev - 1));
+        }, 60000); // Decrease every minute
+
+        return () => clearInterval(timer);
+    }, [remainingMinutes]);
+
+    // Calculate progress for the circle (0 to 1)
+    // 1 means full circle (start), 0 means empty (done)
+    const progress = initialEstimatedMinutes > 0 ? remainingMinutes / initialEstimatedMinutes : 0;
 
     // Show info form if not submitted
     if (!hasSubmittedInfo) {
@@ -334,6 +435,49 @@ export default function ClientPortalPage() {
         );
     }
 
+    // Show completed screen
+    if (status === 'completed') {
+        return (
+            <div className="min-h-screen bg-gray-50 text-black font-sans flex items-center justify-center px-6">
+                <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="bg-white border-4 border-black p-12 w-full max-w-md shadow-[8px_8px_0px_0px_#000] text-center space-y-8"
+                >
+                    <div className="flex justify-center">
+                        <div className="bg-[#10B981] text-white p-4 rounded-full border-4 border-black shadow-[4px_4px_0px_0px_#000]">
+                            <CheckCircle className="h-12 w-12" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <h1 className="font-display font-black text-4xl uppercase tracking-tight mb-4">
+                            Visite Terminée
+                        </h1>
+                        <p className="text-gray-600 font-bold text-lg">
+                            Merci de votre visite !
+                        </p>
+                    </div>
+
+                    <div className="pt-8 border-t-2 border-gray-100">
+                        <p className="text-sm font-bold text-gray-400 uppercase tracking-wide">
+                            À bientôt chez Saffi
+                        </p>
+                    </div>
+                </motion.div>
+
+                {/* Review Gate Overlay */}
+                {isReviewGateOpen && (
+                    <ReviewGate
+                        clinicUserId={clinicUserId}
+                        googleReviewLink={googleReviewLink}
+                        onClose={() => setIsReviewGateOpen(false)}
+                    />
+                )}
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gray-50 text-black font-sans pb-8">
             {/* Simple Header */}
@@ -348,8 +492,13 @@ export default function ClientPortalPage() {
                 {/* Status Message */}
                 <div className="text-center">
                     <h1 className="font-black text-2xl uppercase tracking-tight mb-1">
-                        {isServing ? "C'est votre tour!" : "Vous êtes en ligne!"}
+                        {isServing ? "C'est votre tour!" : position === 1 ? "Vous êtes le prochain !" : "Vous êtes en ligne!"}
                     </h1>
+                    {position === 1 && !isServing && (
+                        <p className="text-[#2C2B57] font-bold uppercase tracking-wide animate-pulse">
+                            Préparez-vous à entrer
+                        </p>
+                    )}
                 </div>
 
                 {/* Circular Progress Card */}
@@ -404,7 +553,7 @@ export default function ClientPortalPage() {
                                         strokeWidth="12"
                                         strokeLinecap="round"
                                         strokeDasharray={`${2 * Math.PI * 90}`}
-                                        strokeDashoffset={`${2 * Math.PI * 90 * (1 - (position ? Math.min(position / 10, 1) : 0))}`}
+                                        strokeDashoffset={`${2 * Math.PI * 90 * (1 - progress)}`}
                                         className="transition-all duration-1000 ease-out"
                                     />
                                 </svg>
@@ -413,7 +562,7 @@ export default function ClientPortalPage() {
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                                     <div className="text-center">
                                         <p className="font-black text-7xl text-[#2C2B57]">
-                                            {estimatedMinutes}<span className="text-4xl">min</span>
+                                            {remainingMinutes}<span className="text-4xl">min</span>
                                         </p>
                                         <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mt-2">
                                             temps estimé

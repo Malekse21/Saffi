@@ -78,9 +78,9 @@ export default function DashboardLayout({
         },
         {
             name: "Borne QR",
-            href: "/dashboard/qr",
+            href: "/dashboard/qr-station",
             icon: QrCode,
-            active: pathname === "/dashboard/qr",
+            active: pathname === "/dashboard/qr-station",
         },
         {
             name: "Réglages",
@@ -170,11 +170,18 @@ export default function DashboardLayout({
                         </div>
 
                         {/* Center: SMS Count */}
-                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transform">
+                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transform flex items-center gap-2">
                             <div className="flex items-center gap-3 rounded-full border-2 border-black bg-gray-100 px-6 py-2 font-bold text-lg shadow-[4px_4px_0px_0px_#000]">
                                 <span className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
                                 <span>0 SMS</span>
                             </div>
+                            <Link
+                                href="/dashboard/sms-topup"
+                                className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-solar-yellow text-black shadow-[4px_4px_0px_0px_#000] transition-all hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_0px_#000] active:translate-y-0 active:shadow-none"
+                                title="Recharger SMS"
+                            >
+                                <Plus className="h-5 w-5 stroke-[3]" />
+                            </Link>
                         </div>
 
                         {/* Right: Date & Time */}

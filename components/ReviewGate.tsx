@@ -19,11 +19,7 @@ export default function ReviewGate({ googleReviewLink, onClose, clinicUserId }: 
 
     const handleRate = (score: number) => {
         setRating(score);
-        if (score <= 3) {
-            setStep("feedback");
-        } else {
-            setStep("google");
-        }
+        setStep("google");
     };
 
     const handleSubmitFeedback = async () => {

@@ -2,12 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { PatientCard, Patient } from "@/components/dashboard/PatientCard";
-import { SortablePatientCard } from "@/components/dashboard/SortablePatientCard";
 import { AddPatientModal } from "@/components/dashboard/AddPatientModal";
 import { Tv, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { getPatients, subscribeToPatients, updatePatientStatus } from "@/lib/patients";
 
 type DBPatient = {
@@ -29,22 +26,23 @@ export default function AccueilPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Setup drag sensors
-    const sensors = useSensors(
-        useSensor(PointerSensor),
-        useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-        })
-    );
-
     // Fetch patients on mount
     useEffect(() => {
         loadPatients();
 
         // Subscribe to real-time updates
-        const unsubscribe = subscribeToPatients(() => {
-            loadPatients();
-        });
+        const unsubscribe = subscribeToPatients(
+            () => {
+                loadPatients();
+            },
+            (status) => {
+                if (status === 'SUBSCRIBED') {
+                    toast.success("Connexion temps réel établie");
+                } else if (status === 'CHANNEL_ERROR') {
+                    toast.error("Erreur de connexion temps réel");
+                }
+            }
+        );
 
         return () => unsubscribe();
     }, []);
@@ -81,7 +79,8 @@ export default function AccueilPage() {
         type: p.type,
         appointmentTime: p.rdv_time ? new Date(p.rdv_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : undefined,
         isPriority: false,
-        position: position
+        position: position,
+        ticketNumber: p.ticket_number
     });
 
     const activePatient = patients.find(p => p.status === 'active');
@@ -91,18 +90,26 @@ export default function AccueilPage() {
     const transformedQueuePatients = queuePatients.map((p, index) => transformPatient(p, index + 1));
 
     const handleCallNext = async () => {
-        if (!activePatient) return;
-
         try {
-            await updatePatientStatus(activePatient.id, 'completed');
-
-            // Get next waiting patient
-            const nextPatient = queuePatients[0];
-            if (nextPatient) {
-                await updatePatientStatus(nextPatient.id, 'active');
+            // If there is an active patient, mark them as completed
+            if (activePatient) {
+                await updatePatientStatus(activePatient.id, 'completed');
             }
 
-            toast.success("Prochain patient appelé!");
+            // Get next waiting patient (skip 'away' patients)
+            const nextPatient = queuePatients.find(p => p.status === 'waiting');
+
+            if (nextPatient) {
+                await updatePatientStatus(nextPatient.id, 'active');
+                toast.success(`Patient ${nextPatient.name} appelé!`);
+            } else {
+                // Check if there are any patients at all (including away)
+                if (queuePatients.length > 0) {
+                    toast.info("Tous les patients en attente sont absents");
+                } else {
+                    toast.info("Aucun patient en attente");
+                }
+            }
         } catch (error) {
             console.error(error);
             toast.error("Erreur lors de l'appel du patient");
@@ -116,27 +123,6 @@ export default function AccueilPage() {
 
     const handleAddPatient = () => {
         setIsModalOpen(true);
-    };
-
-    const handleDragEnd = (event: DragEndEvent) => {
-        const { active, over } = event;
-
-        if (over && active.id !== over.id) {
-            const oldIndex = transformedQueuePatients.findIndex(p => p.id === active.id);
-            const newIndex = transformedQueuePatients.findIndex(p => p.id === over.id);
-
-            if (oldIndex !== -1 && newIndex !== -1) {
-                // Update order locally
-                const newOrder = arrayMove(queuePatients, oldIndex, newIndex);
-                const updatedPatients = [...patients];
-
-                // Replace the queue patients in the original array
-                const nonQueuePatients = updatedPatients.filter(p => p.status !== 'waiting' && p.status !== 'away');
-                setPatients([...nonQueuePatients, ...newOrder]);
-
-                toast.success("Ordre mis à jour");
-            }
-        }
     };
 
     return (
@@ -226,31 +212,20 @@ export default function AccueilPage() {
                                 <p className="text-gray-500 font-medium">Chargement...</p>
                             </div>
                         ) : (
-                            <DndContext
-                                sensors={sensors}
-                                collisionDetection={closestCenter}
-                                onDragEnd={handleDragEnd}
-                            >
-                                <SortableContext
-                                    items={transformedQueuePatients.map(p => p.id)}
-                                    strategy={verticalListSortingStrategy}
-                                >
-                                    <div className="space-y-4">
-                                        {transformedQueuePatients.length > 0 ? (
-                                            transformedQueuePatients.map((patient) => (
-                                                <SortablePatientCard
-                                                    key={patient.id}
-                                                    patient={patient}
-                                                />
-                                            ))
-                                        ) : (
-                                            <div className="border-2 border-black border-dashed p-8 text-center bg-gray-50">
-                                                <p className="text-gray-500 font-medium">Aucun patient en attente</p>
-                                            </div>
-                                        )}
+                            <div className="space-y-4">
+                                {transformedQueuePatients.length > 0 ? (
+                                    transformedQueuePatients.map((patient) => (
+                                        <PatientCard
+                                            key={patient.id}
+                                            patient={patient}
+                                        />
+                                    ))
+                                ) : (
+                                    <div className="border-2 border-black border-dashed p-8 text-center bg-gray-50">
+                                        <p className="text-gray-500 font-medium">Aucun patient en attente</p>
                                     </div>
-                                </SortableContext>
-                            </DndContext>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>

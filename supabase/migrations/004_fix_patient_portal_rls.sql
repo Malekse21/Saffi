@@ -52,7 +52,8 @@ ADD COLUMN IF NOT EXISTS clinic_id UUID;
 
 -- Sync clinic_id from profiles to queue_settings
 UPDATE queue_settings qs
-SET clinic_id = p.clinic_id
+SET clinic_id = p.clinic_id::uuid
 FROM profiles p
 WHERE qs.user_id = p.id
-AND qs.clinic_id IS NULL;
+AND qs.clinic_id IS NULL
+AND p.clinic_id IS NOT NULL;

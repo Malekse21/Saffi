@@ -11,6 +11,7 @@ export interface Patient {
     type: 'walk-in' | 'rdv';
     appointmentTime?: string;
     isPriority?: boolean;
+    ticketNumber?: string;
     position?: number;
 }
 
@@ -45,10 +46,10 @@ export function PatientCard({
 
                 <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                        {/* Position Badge */}
-                        {patient.position && (
+                        {/* Ticket Number Badge */}
+                        {patient.ticketNumber && (
                             <span className="bg-black text-white px-2 py-0.5 text-xs font-bold border-2 border-black">
-                                #{patient.position}
+                                {patient.ticketNumber}
                             </span>
                         )}
 

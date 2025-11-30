@@ -140,7 +140,7 @@ export default function TVPage() {
                     .filter((p: any) => p.status === 'waiting' || p.status === 'away')
                     .map((p: any, index: number) => ({
                         id: p.id,
-                        ticketNumber: `#${index + 1}`, // Simple numbering based on position
+                        ticketNumber: p.ticket_number,
                         name: p.name,
                         status: p.status,
                         type: p.type,
@@ -189,9 +189,14 @@ export default function TVPage() {
         loadData();
 
         // Subscribe to real-time updates
-        const unsubscribe = subscribeToPatients(() => {
-            loadData();
-        });
+        const unsubscribe = subscribeToPatients(
+            () => {
+                loadData();
+            },
+            (status) => {
+                console.log("TV Realtime Status:", status);
+            }
+        );
 
         // Time update
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
