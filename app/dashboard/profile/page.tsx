@@ -25,14 +25,12 @@ export default async function ProfilePage() {
         const defaultProfile = {
             id: user.id,
             email: user.email,
-            first_name: '',
-            last_name: '',
+            full_name: '',
             specialty: '',
             phone: '',
             address: '',
             bio: '',
-            license_number: '',
-            cabinet_name: '',
+            avatar_url: '',
         };
         return <ProfileForm profile={defaultProfile} />;
     }

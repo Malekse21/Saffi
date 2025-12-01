@@ -15,14 +15,12 @@ import {
     Legend,
 } from "recharts";
 import { Clock, Wallet, Star, FileText, Loader2 } from "lucide-react";
-import { useDashboard } from "../layout";
 import { createClient } from "@/utils/supabase/client";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
 
 export default function AnalyticsPage() {
-    const { primaryColor } = useDashboard();
     const [timeRange, setTimeRange] = useState<"month" | "year">("month");
     const [loading, setLoading] = useState(true);
     const containerRef = useRef<HTMLDivElement>(null);

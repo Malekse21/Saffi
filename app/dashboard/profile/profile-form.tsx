@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { User, MapPin, Phone, Mail, Briefcase, FileText, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
@@ -10,23 +10,55 @@ import Image from "next/image";
 export default function ProfileForm({ profile }: { profile: any }) {
     const supabase = createClient();
     const router = useRouter();
-    const [formData, setFormData] =useState({
-        firstName: profile.first_name || "",
-        lastName: profile.last_name || "",
+    const [formData, setFormData] = useState({
+        fullName: profile.full_name || "",
         specialty: profile.specialty || "",
         email: profile.email || "",
         phone: profile.phone || "",
         address: profile.address || "",
         bio: profile.bio || "",
-        licenseNumber: profile.license_number || "",
-        cabinetName: profile.cabinet_name || "",
     });
-    const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Load avatar with signed URL on mount
+    useEffect(() => {
+        const loadAvatar = async () => {
+            if (profile.avatar_url) {
+                // If avatar_url is a file path (not a full URL), generate signed URL
+                if (!profile.avatar_url.startsWith('http')) {
+                    const { data } = await supabase.storage
+                        .from('avatars')
+                        .createSignedUrl(profile.avatar_url, 60 * 60 * 24); // 24 hours
+
+                    if (data?.signedUrl) {
+                        setAvatarUrl(data.signedUrl);
+                    }
+                } else {
+                    setAvatarUrl(profile.avatar_url);
+                }
+            }
+        };
+        loadAvatar();
+    }, [profile.avatar_url, supabase]);
+
+    const capitalizeWords = (str: string) => {
+        return str
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    };
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+
+        // Auto-capitalize all text fields (except email which should be lowercase)
+        if (name !== 'email' && name !== 'phone') {
+            setFormData({ ...formData, [name]: capitalizeWords(value) });
+        } else {
+            setFormData({ ...formData, [name]: value });
+        }
     };
 
     const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,20 +84,25 @@ export default function ProfileForm({ profile }: { profile: any }) {
             return;
         }
 
-        const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
-
-        setAvatarUrl(publicUrl);
-
+        // For private buckets, we store the file path and generate signed URLs when needed
         const { error: updateError } = await supabase
             .from('profiles')
-            .update({ avatar_url: publicUrl })
+            .update({ avatar_url: filePath })
             .eq('id', profile.id);
 
         if (updateError) {
             toast.error("Erreur lors de la mise à jour du profil.");
             console.error('Error updating profile avatar url:', updateError);
         } else {
-            toast.success("Avatar mis à jour avec succès!");
+            // Generate signed URL for display
+            const { data } = await supabase.storage
+                .from('avatars')
+                .createSignedUrl(filePath, 60 * 60 * 24); // 24 hours
+
+            if (data?.signedUrl) {
+                setAvatarUrl(data.signedUrl);
+            }
+
             router.refresh();
         }
 
@@ -73,17 +110,18 @@ export default function ProfileForm({ profile }: { profile: any }) {
     };
 
     const handleSave = async () => {
+        // Auto-generate clinic name
+        const clinicName = formData.fullName ? `Cabinet Dr. ${formData.fullName}` : '';
+
         const { error } = await supabase
             .from("profiles")
             .update({
-                first_name: formData.firstName,
-                last_name: formData.lastName,
+                full_name: formData.fullName,
+                clinic_name: clinicName,
                 specialty: formData.specialty,
                 phone: formData.phone,
                 address: formData.address,
                 bio: formData.bio,
-                license_number: formData.licenseNumber,
-                cabinet_name: formData.cabinetName,
             })
             .eq("id", profile.id);
 
@@ -91,7 +129,14 @@ export default function ProfileForm({ profile }: { profile: any }) {
             toast.error("Erreur lors de la mise à jour du profil.");
             console.error("Error updating profile:", error);
         } else {
-            toast.success("Profil mis à jour avec succès!");
+            toast.success("✅ Profil enregistré!", {
+                duration: 3000,
+                style: {
+                    background: '#10b981',
+                    color: 'white',
+                    fontWeight: 'bold',
+                },
+            });
             router.refresh();
         }
     };
@@ -127,7 +172,7 @@ export default function ProfileForm({ profile }: { profile: any }) {
                                 accept="image/png, image/jpeg"
                                 disabled={uploading}
                             />
-                            <button 
+                            <button
                                 className="flex items-center gap-2 border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-[4px_4px_0px_0px_#000] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:bg-gray-900"
                                 onClick={() => fileInputRef.current?.click()}
                                 disabled={uploading}
@@ -153,45 +198,16 @@ export default function ProfileForm({ profile }: { profile: any }) {
                     <div className="border-2 border-black p-6 bg-white shadow-[4px_4px_0px_0px_#000] space-y-6">
                         <h2 className="text-xl font-bold uppercase mb-4">Informations Personnelles</h2>
 
-                        {/* Name Fields */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-bold mb-2 uppercase">
-                                    <User className="inline h-4 w-4 mr-2" />
-                                    Prénom
-                                </label>
-                                <input
-                                    type="text"
-                                    name="firstName"
-                                    value={formData.firstName}
-                                    onChange={handleChange}
-                                    className="w-full border-2 border-black px-4 py-3 font-medium focus:outline-none focus:ring-2 focus:ring-black"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold mb-2 uppercase">
-                                    Nom
-                                </label>
-                                <input
-                                    type="text"
-                                    name="lastName"
-                                    value={formData.lastName}
-                                    onChange={handleChange}
-                                    className="w-full border-2 border-black px-4 py-3 font-medium focus:outline-none focus:ring-2 focus:ring-black"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Cabinet Name */}
+                        {/* Full Name Field */}
                         <div>
                             <label className="block text-sm font-bold mb-2 uppercase">
-                                <Briefcase className="inline h-4 w-4 mr-2" />
-                                Nom du Cabinet
+                                <User className="inline h-4 w-4 mr-2" />
+                                Nom Complet
                             </label>
                             <input
                                 type="text"
-                                name="cabinetName"
-                                value={formData.cabinetName}
+                                name="fullName"
+                                value={formData.fullName}
                                 onChange={handleChange}
                                 className="w-full border-2 border-black px-4 py-3 font-medium focus:outline-none focus:ring-2 focus:ring-black"
                             />
@@ -207,21 +223,6 @@ export default function ProfileForm({ profile }: { profile: any }) {
                                 type="text"
                                 name="specialty"
                                 value={formData.specialty}
-                                onChange={handleChange}
-                                className="w-full border-2 border-black px-4 py-3 font-medium focus:outline-none focus:ring-2 focus:ring-black"
-                            />
-                        </div>
-
-                        {/* License Number */}
-                        <div>
-                            <label className="block text-sm font-bold mb-2 uppercase">
-                                <FileText className="inline h-4 w-4 mr-2" />
-                                Numéro d'Ordre
-                            </label>
-                            <input
-                                type="text"
-                                name="licenseNumber"
-                                value={formData.licenseNumber}
                                 onChange={handleChange}
                                 className="w-full border-2 border-black px-4 py-3 font-medium focus:outline-none focus:ring-2 focus:ring-black"
                             />
@@ -281,7 +282,7 @@ export default function ProfileForm({ profile }: { profile: any }) {
                             <textarea
                                 name="bio"
                                 value={formData.bio}
-                               onChange={handleChange}
+                                onChange={handleChange}
                                 rows={4}
                                 className="w-full border-2 border-black px-4 py-3 font-medium focus:outline-none focus:ring-2 focus:ring-black resize-none"
                             />

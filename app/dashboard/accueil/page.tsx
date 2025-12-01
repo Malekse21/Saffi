@@ -167,15 +167,13 @@ export default function AccueilPage() {
                         )}
 
                         {/* Call Next Patient Button */}
-                        {queuePatients.length > 0 && (
-                            <button
-                                onClick={handleCallNext}
-                                disabled={!activePatient && queuePatients.length === 0}
-                                className="w-full bg-[#1e1b4b] text-white py-3 px-6 font-bold uppercase tracking-wide border-2 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {activePatient ? "Appeler le Patient Suivant" : "Appeler le Premier Patient"}
-                            </button>
-                        )}
+                        <button
+                            onClick={handleCallNext}
+                            disabled={queuePatients.length === 0}
+                            className="w-full bg-[#1e1b4b] text-white py-3 px-6 font-bold uppercase tracking-wide border-2 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {activePatient ? "Appeler le Patient Suivant" : "Appeler le Premier Patient"}
+                        </button>
 
                         {/* Action Buttons */}
                         <div className="space-y-3">
