@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Maximize, Minimize, Volume2, VolumeX, Cast } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/utils/supabase/client";
 import { getPatients, subscribeToPatients } from "@/lib/patients";
 
 // Define local Patient type for TV display
@@ -18,13 +19,42 @@ interface TVPatient {
 }
 
 export default function TVPage() {
+    const supabase = createClient();
     const [activePatient, setActivePatient] = useState<TVPatient | null>(null);
     const [queue, setQueue] = useState<TVPatient[]>([]);
     const [currentTime, setCurrentTime] = useState(new Date());
     const [isAnnounceEnabled, setIsAnnounceEnabled] = useState(true);
     const isAnnounceEnabledRef = useRef(true);
     const [isFullscreen, setIsFullscreen] = useState(false);
-    const [clinicName, setClinicName] = useState("Cabinet Dr. Malek");
+    const [clinicName, setClinicName] = useState("Cabinet Médical");
+    const [privacyMode, setPrivacyMode] = useState(false);
+
+    useEffect(() => {
+        const fetchClinicDetails = async () => {
+            const { data: userData, error: authError } = await supabase.auth.getUser();
+            if (authError) {
+                console.error("Auth error on TV page:", authError);
+                return;
+            }
+
+            const user = userData?.user;
+            if (user) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('clinic_name, tv_privacy_mode')
+                    .eq('id', user.id)
+                    .single();
+
+                if (profile?.clinic_name) {
+                    setClinicName(profile.clinic_name);
+                }
+                if (profile?.tv_privacy_mode) {
+                    setPrivacyMode(profile.tv_privacy_mode);
+                }
+            }
+        };
+        fetchClinicDetails();
+    }, [supabase]);
 
     // Audio Context Ref
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -152,11 +182,6 @@ export default function TVPage() {
                 setActivePatient(prev => {
                     if (active && active.id !== prev?.id) {
                         // New active patient!
-                        const ticketNum = `#${waiting.length + 1}`; // Just a placeholder, ideally we use actual ticket number if available
-                        // Actually, let's use the name or a generated number. 
-                        // Since we don't have persistent ticket numbers in the DB schema shown earlier (it was just 'ticket_number' string),
-                        // let's use the one from DB if available, or generate one.
-                        // The DBPatient type has ticket_number.
                         playNotificationSound(active.ticket_number || "Suivant");
 
                         return {
@@ -254,8 +279,8 @@ export default function TVPage() {
             <main className="flex-1 grid grid-cols-12 gap-8 p-8 bg-gray-50">
                 {/* Left: Active Patient (8 cols) */}
                 <div className="col-span-8 flex flex-col gap-8 h-full">
-                    {/* Active Patient Card - Deep Navy Blue Background */}
-                    <div className="flex-1 bg-[#1e1b4b] border-4 border-black shadow-[16px_16px_0px_0px_#000] flex flex-col items-center justify-center relative overflow-hidden p-12">
+                    {/* Active Patient Card - White Background (Matching Dashboard) */}
+                    <div className="flex-1 bg-white border-4 border-black shadow-[12px_12px_0px_0px_#000] flex flex-col items-center justify-center relative overflow-hidden p-12">
                         <AnimatePresence mode="wait">
                             <motion.div
                                 key={activePatient?.id || 'empty'}
@@ -267,20 +292,22 @@ export default function TVPage() {
                             >
                                 {activePatient ? (
                                     <>
-                                        <span className="font-bold text-4xl text-white/80 uppercase tracking-widest mb-4">
+                                        <span className="font-bold text-4xl text-gray-500 uppercase tracking-widest mb-4">
                                             En Consultation
                                         </span>
-                                        <span className="block font-display font-black text-[12rem] leading-none tracking-tighter text-white drop-shadow-[8px_8px_0px_rgba(0,0,0,1)]">
-                                            {activePatient.name}
+                                        <span className="block font-display font-black text-[10rem] leading-none tracking-tighter text-black">
+                                            {privacyMode ? activePatient.ticketNumber : activePatient.name}
                                         </span>
-                                        <div className="bg-white px-12 py-6 border-4 border-black shadow-[8px_8px_0px_0px_#000] mt-8">
-                                            <span className="text-6xl font-black text-black uppercase">
-                                                {activePatient.ticketNumber}
-                                            </span>
-                                        </div>
+                                        {!privacyMode && (
+                                            <div className="bg-[#2C2B57] px-16 py-8 border-4 border-black shadow-[8px_8px_0px_0px_#000] mt-8">
+                                                <span className="font-display text-7xl font-bold text-white uppercase tracking-widest">
+                                                    {activePatient.ticketNumber}
+                                                </span>
+                                            </div>
+                                        )}
                                     </>
                                 ) : (
-                                    <span className="font-display font-black text-[8rem] text-white uppercase leading-none tracking-tight opacity-50">
+                                    <span className="font-display font-black text-[8rem] text-gray-200 uppercase leading-none tracking-tight">
                                         EN ATTENTE
                                     </span>
                                 )}
@@ -292,7 +319,7 @@ export default function TVPage() {
                 {/* Right: Next & Ad (4 cols) */}
                 <div className="col-span-4 flex flex-col gap-8 h-full">
                     {/* Next Patients */}
-                    <div className="bg-white border-4 border-black shadow-[8px_8px_0px_0px_#000] p-8 flex-1 overflow-hidden flex flex-col">
+                    <div className="bg-white border-4 border-black shadow-[12px_12px_0px_0px_#000] p-8 flex-1 overflow-hidden flex flex-col">
                         <h3 className="font-black text-4xl text-black mb-8 flex items-center gap-4 shrink-0 border-b-4 border-black pb-6 uppercase tracking-tight">
                             <Clock className="h-10 w-10" /> SUIVANTS
                         </h3>
@@ -305,17 +332,27 @@ export default function TVPage() {
                                     transition={{ delay: index * 0.1 }}
                                     className="border-4 border-black p-6 flex items-center justify-between bg-gray-50 shadow-[4px_4px_0px_0px_#000]"
                                 >
-                                    <div className="flex flex-col">
-                                        <span className="font-bold text-2xl text-gray-900 truncate max-w-[200px]">
-                                            {patient.name}
-                                        </span>
-                                        <span className="text-sm font-bold text-gray-500 uppercase">
-                                            {patient.type === 'rdv' ? 'Rendez-vous' : 'Sans RDV'}
-                                        </span>
-                                    </div>
-                                    <span className="font-black text-4xl bg-black text-white px-4 py-2">
-                                        {patient.ticketNumber}
-                                    </span>
+                                    {privacyMode ? (
+                                        <div className="w-full flex justify-center">
+                                            <span className="font-display font-bold text-4xl bg-black text-white px-4 py-2">
+                                                {patient.ticketNumber}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-2xl text-gray-900 truncate max-w-[200px]">
+                                                    {patient.name}
+                                                </span>
+                                                <span className="text-sm font-bold text-gray-500 uppercase">
+                                                    {patient.type === 'rdv' ? 'Rendez-vous' : 'Sans RDV'}
+                                                </span>
+                                            </div>
+                                            <span className="font-display font-bold text-4xl bg-black text-white px-4 py-2">
+                                                {patient.ticketNumber}
+                                            </span>
+                                        </>
+                                    )}
                                 </motion.div>
                             ))}
                             {queue.length === 0 && (
@@ -326,10 +363,17 @@ export default function TVPage() {
                         </div>
                     </div>
 
-                    {/* Ad Card - Deep Navy Blue */}
-                    <div className="bg-[#1e1b4b] border-4 border-black p-8 h-64 flex flex-col items-center justify-center text-center shadow-[8px_8px_0px_0px_#000] text-white shrink-0">
-                        <h3 className="font-display font-black text-4xl mb-2 uppercase tracking-tight">Bienvenue</h3>
-                        <p className="font-bold text-xl uppercase tracking-wide opacity-80">Cabinet Dr. Malek</p>
+                    {/* Ad Space - Replaced Welcome Message */}
+                    <div className="bg-gray-100 border-4 border-black border-dashed p-8 h-64 flex flex-col items-center justify-center text-center relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/diagonal-striped-brick.png')] opacity-10"></div>
+                        <div className="relative z-10 transform group-hover:scale-105 transition-transform duration-300">
+                            <span className="block font-black text-3xl text-gray-300 uppercase tracking-widest mb-2">
+                                Espace Publicitaire
+                            </span>
+                            <span className="block font-bold text-sm text-gray-400 uppercase tracking-wide border-2 border-gray-300 px-4 py-1 rounded-full w-fit mx-auto">
+                                Disponible
+                            </span>
+                        </div>
                     </div>
                 </div>
             </main>

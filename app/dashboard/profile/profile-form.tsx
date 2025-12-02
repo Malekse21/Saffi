@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { User, MapPin, Phone, Mail, Briefcase, FileText, Upload } from "lucide-react";
+import { User, MapPin, Phone, Mail, Briefcase, FileText, Upload, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
@@ -13,6 +13,7 @@ export default function ProfileForm({ profile }: { profile: any }) {
     const [formData, setFormData] = useState({
         fullName: profile.full_name || "",
         specialty: profile.specialty || "",
+        consultationDuration: profile.consultation_duration || 20,
         email: profile.email || "",
         phone: profile.phone || "",
         address: profile.address || "",
@@ -54,7 +55,7 @@ export default function ProfileForm({ profile }: { profile: any }) {
         const { name, value } = e.target;
 
         // Auto-capitalize all text fields (except email which should be lowercase)
-        if (name !== 'email' && name !== 'phone') {
+        if (name !== 'email' && name !== 'phone' && name !== 'consultationDuration') {
             setFormData({ ...formData, [name]: capitalizeWords(value) });
         } else {
             setFormData({ ...formData, [name]: value });
@@ -119,6 +120,7 @@ export default function ProfileForm({ profile }: { profile: any }) {
                 full_name: formData.fullName,
                 clinic_name: clinicName,
                 specialty: formData.specialty,
+                consultation_duration: parseInt(formData.consultationDuration.toString()),
                 phone: formData.phone,
                 address: formData.address,
                 bio: formData.bio,
@@ -213,19 +215,35 @@ export default function ProfileForm({ profile }: { profile: any }) {
                             />
                         </div>
 
-                        {/* Specialty */}
-                        <div>
-                            <label className="block text-sm font-bold mb-2 uppercase">
-                                <Briefcase className="inline h-4 w-4 mr-2" />
-                                Spécialité
-                            </label>
-                            <input
-                                type="text"
-                                name="specialty"
-                                value={formData.specialty}
-                                onChange={handleChange}
-                                className="w-full border-2 border-black px-4 py-3 font-medium focus:outline-none focus:ring-2 focus:ring-black"
-                            />
+                        {/* Specialty and Duration */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-bold mb-2 uppercase">
+                                    <Briefcase className="inline h-4 w-4 mr-2" />
+                                    Spécialité
+                                </label>
+                                <input
+                                    type="text"
+                                    name="specialty"
+                                    value={formData.specialty}
+                                    onChange={handleChange}
+                                    className="w-full border-2 border-black px-4 py-3 font-medium focus:outline-none focus:ring-2 focus:ring-black"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold mb-2 uppercase">
+                                    <Clock className="inline h-4 w-4 mr-2" />
+                                    Durée Moyenne (min)
+                                </label>
+                                <input
+                                    type="number"
+                                    name="consultationDuration"
+                                    value={formData.consultationDuration}
+                                    onChange={handleChange}
+                                    min="1"
+                                    className="w-full border-2 border-black px-4 py-3 font-medium focus:outline-none focus:ring-2 focus:ring-black"
+                                />
+                            </div>
                         </div>
 
                         {/* Contact Fields */}

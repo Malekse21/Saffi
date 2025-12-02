@@ -1,0 +1,2 @@
+ALTER TABLE profiles
+ADD COLUMN tv_privacy_mode BOOLEAN DEFAULT FALSE;
