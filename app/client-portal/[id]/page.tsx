@@ -375,18 +375,51 @@ export default function ClientPortalPage() {
     // 1 means full circle (start), 0 means empty (done)
     const progress = initialEstimatedMinutes > 0 ? remainingMinutes / initialEstimatedMinutes : 0;
 
+    // Fetch clinic details
+    const [clinicName, setClinicName] = useState("");
+    const [specialty, setSpecialty] = useState("");
+
+    useEffect(() => {
+        const fetchClinicDetails = async () => {
+            if (!clinicUserId) return;
+
+            const supabase = createClient();
+            const { data } = await supabase
+                .from('profiles')
+                .select('clinic_name, specialty')
+                .eq('id', clinicUserId)
+                .single();
+
+            if (data) {
+                setClinicName(data.clinic_name || "Cabinet Médical");
+                setSpecialty(data.specialty || "");
+            }
+        };
+
+        fetchClinicDetails();
+    }, [clinicUserId]);
+
     // Show info form if not submitted
     if (!hasSubmittedInfo) {
         return (
-            <div className="min-h-screen bg-gray-50 text-black font-sans flex items-center justify-center px-6">
+            <div className="min-h-screen bg-white text-black font-sans flex items-center justify-center p-6 relative overflow-hidden">
+                {/* Corner illustrations - matching QR poster */}
+                <div className="absolute top-4 right-4 w-12 h-12 bg-pink-400 border-4 border-black rounded-lg"></div>
+                <div className="absolute top-4 left-4 w-12 h-12 bg-teal-400 border-4 border-black rounded-full"></div>
+                <div className="absolute bottom-4 left-4 w-12 h-12 bg-yellow-300 border-4 border-black rounded-lg rotate-45"></div>
+                <div className="absolute bottom-4 right-4 w-12 h-12 bg-purple-400 border-4 border-black rounded-full"></div>
+
                 <motion.div
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    className="bg-white border-4 border-black p-8 w-full max-w-md shadow-[8px_8px_0px_0px_#000]"
+                    className="bg-white border-4 border-black p-8 w-full max-w-md shadow-[8px_8px_0px_0px_#000] relative z-10"
                 >
-                    <div className="text-center mb-8">
-                        <span className="font-display font-black text-5xl tracking-tighter uppercase">Saffi.</span>
-                        <p className="text-gray-600 mt-3 font-bold text-sm uppercase tracking-wide">Rejoindre la file d'attente</p>
+                    <div className="text-center mb-8 space-y-1">
+                        <h1 className="font-display font-black text-4xl tracking-tight uppercase">BIENVENUE</h1>
+                        <h2 className="font-bold text-lg">{clinicName}</h2>
+                        {specialty && (
+                            <p className="font-semibold text-sm text-gray-600 italic">{specialty}</p>
+                        )}
                     </div>
 
                     <form onSubmit={handleSubmitInfo} className="space-y-6">
@@ -430,6 +463,12 @@ export default function ClientPortalPage() {
                             {isSubmitting ? "Ajout en cours..." : "Rejoindre la file"}
                         </button>
                     </form>
+
+                    <div className="text-center mt-8">
+                        <p className="font-semibold text-xs text-gray-500">
+                            Powered by <span className="font-display text-[#2C2B57]">Saffi.tn</span>
+                        </p>
+                    </div>
                 </motion.div>
             </div>
         );
