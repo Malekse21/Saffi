@@ -198,7 +198,7 @@ export default function DashboardLayout({
                     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transform flex items-center gap-2">
                         <div className="flex items-center gap-3 rounded-full border-2 border-black bg-gray-100 px-6 py-2 font-bold text-lg shadow-[4px_4px_0px_0px_#000]">
                             <span className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
-                            <span>0 SMS</span>
+                            <span>{profile?.sms_balance || 0} SMS</span>
                         </div>
                         <Link
                             href="/dashboard/sms-topup"

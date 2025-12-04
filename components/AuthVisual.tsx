@@ -18,8 +18,6 @@ export default function AuthVisual() {
     return (
         <div
             className="h-full w-full bg-[#FDFBF7] relative overflow-hidden flex items-center justify-center border-l-2 border-black"
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
         >
             {/* Dot Pattern Background */}
             <div className="absolute inset-0 opacity-[0.05]"
@@ -30,7 +28,11 @@ export default function AuthVisual() {
             />
 
             {/* The Queue Container */}
-            <div className="relative w-64 h-[600px] flex flex-col items-center justify-center">
+            <div
+                className="relative w-64 h-[600px] flex flex-col items-center justify-center"
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+            >
                 {cards.map((card, index) => (
                     <motion.div
                         key={card.id}

@@ -1,116 +1,193 @@
-"use client";
+'use client';
 
-import { Check, MessageSquare } from "lucide-react";
-import { cn } from "@/lib/utils";
+import React, { useState, useEffect } from 'react';
+import { MessageCircle, Zap, Check, CreditCard } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
 
-interface SmsPackProps {
-    amount: number;
-    price: number;
-    features: string[];
-    recommended?: boolean;
-}
+// The Pricing Configuration
+const smsPacks = [
+    {
+        id: 'starter',
+        name: 'Dépannage',
+        count: 100,
+        price: 10,
+        description: 'Pour les urgences.',
+        bg: 'bg-white',
+        badge: null
+    },
+    {
+        id: 'standard',
+        name: 'Confort',
+        count: 300,
+        price: 25,
+        description: 'Le choix équilibré.',
+        bg: 'bg-[#FDFBF7]', // Slightly off-white
+        badge: 'Recommandé',
+        highlight: true // Special border color or effect
+    },
+    {
+        id: 'business',
+        name: 'Business',
+        count: 600,
+        price: 45,
+        description: 'Pour la haute saison.',
+        bg: 'bg-white',
+        badge: 'Meilleur Prix'
+    }
+];
 
-function SmsPackCard({ amount, price, features, recommended = false }: SmsPackProps) {
+export default function SMSRecharge() {
+    const [balance, setBalance] = useState(0);
+    const [loading, setLoading] = useState<string | null>(null);
+    const supabase = createClient();
+
+    useEffect(() => {
+        const fetchBalance = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data } = await supabase
+                    .from('profiles')
+                    .select('sms_balance')
+                    .eq('id', user.id)
+                    .single();
+                if (data) setBalance(data.sms_balance || 0);
+            }
+        };
+        fetchBalance();
+    }, []);
+
+    const handleBuy = (packId: string, count: number) => {
+        setLoading(packId);
+
+        // Simulate Payment API Call (Konnect/Flouci)
+        setTimeout(async () => {
+            // Optimistic update
+            setBalance(prev => prev + count);
+
+            // Update in DB (Mocking the backend payment webhook)
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                await supabase.rpc('increment_sms_balance', {
+                    user_id: user.id,
+                    amount: count
+                });
+            }
+
+            setLoading(null);
+            alert(`Paiement réussi ! +${count} SMS ajoutés.`);
+        }, 1500);
+    };
+
     return (
-        <div className={cn(
-            "flex flex-col p-8 neo-border neo-shadow rounded-xl transition-transform hover:-translate-y-1",
-            recommended ? "bg-black text-white" : "bg-white text-black"
-        )}>
-            <div className="mb-8">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className={cn(
-                        "h-12 w-12 rounded-lg flex items-center justify-center border-2",
-                        recommended ? "bg-solar-yellow border-white text-black" : "bg-gray-100 border-black text-black"
-                    )}>
-                        <MessageSquare className="h-6 w-6" />
+        <div className="space-y-8 font-sans">
+
+            {/* 1. CURRENT BALANCE CARD */}
+            <div className="relative overflow-hidden bg-black text-white border-2 border-black p-6 shadow-[6px_6px_0px_0px_#94A3B8] rounded-xl flex flex-col md:flex-row items-center justify-between gap-4">
+
+                {/* Decorative Background Pattern */}
+                <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px]" />
+
+                <div className="relative z-10 flex items-center gap-4">
+                    <div className="p-3 bg-white text-black border-2 border-white rounded-lg">
+                        <MessageCircle size={28} strokeWidth={2.5} />
                     </div>
-                    <h3 className={cn("text-2xl font-bold", recommended ? "text-white" : "text-black")}>
-                        {amount} SMS
-                    </h3>
+                    <div>
+                        <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">Solde SMS Actuel</h3>
+                        <p className="text-4xl font-black font-display tracking-tight text-white">
+                            {balance} <span className="text-lg text-gray-400 font-medium">unités</span>
+                        </p>
+                    </div>
                 </div>
 
-                <div className="flex items-baseline gap-1 mb-4">
-                    <span className="text-5xl font-black tracking-tight">{price}</span>
-                    <span className={cn("text-lg font-medium", recommended ? "text-gray-400" : "text-gray-500")}>
-                        TND
-                    </span>
+                <div className="relative z-10 bg-gray-800 px-4 py-2 rounded-lg border border-gray-700">
+                    <p className="text-xs text-gray-300">
+                        1 SMS = 1 Rappel Patient
+                    </p>
                 </div>
             </div>
 
-            <ul className="space-y-4 mb-8 flex-1">
-                {features.map((feature, i) => (
-                    <li key={i} className="flex items-start gap-3">
-                        <div className={cn(
-                            "mt-0.5 h-5 w-5 rounded-full flex items-center justify-center flex-shrink-0",
-                            recommended ? "bg-solar-yellow text-black" : "bg-black text-white"
-                        )}>
-                            <Check className="h-3 w-3 stroke-[3]" />
+            {/* 2. RECHARGE PACKS GRID */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {smsPacks.map((pack) => (
+                    <div
+                        key={pack.id}
+                        className={`
+              relative flex flex-col p-6 border-2 border-black rounded-xl
+              transition-all duration-200 hover:-translate-y-1
+              ${pack.highlight ? 'shadow-[8px_8px_0px_0px_#6366F1]' : 'shadow-[4px_4px_0px_0px_#000]'}
+              ${pack.bg}
+            `}
+                    >
+                        {/* Badge */}
+                        {pack.badge && (
+                            <div className={`
+                absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 text-xs font-black uppercase tracking-wider border-2 border-black
+                ${pack.highlight ? 'bg-[#6366F1] text-white' : 'bg-[#FACC15] text-black'}
+              `}>
+                                {pack.badge}
+                            </div>
+                        )}
+
+                        {/* Header */}
+                        <div className="text-center mb-4 mt-2">
+                            <h4 className="text-lg font-bold text-gray-900">{pack.name}</h4>
+                            <div className="flex justify-center items-baseline gap-1 mt-2">
+                                <span className="text-4xl font-black font-display">{pack.count}</span>
+                                <span className="text-sm font-bold text-gray-500 uppercase">SMS</span>
+                            </div>
                         </div>
-                        <span className="text-sm font-medium leading-tight">{feature}</span>
-                    </li>
+
+                        {/* Divider */}
+                        <div className="h-px bg-gray-200 w-full mb-4" />
+
+                        {/* Price & Description */}
+                        <div className="flex-1 flex flex-col items-center justify-center space-y-2 mb-6">
+                            <p className="text-3xl font-black text-green-600 font-display">
+                                {pack.price} <span className="text-sm text-black">TND</span>
+                            </p>
+                            <p className="text-xs text-center text-gray-500 font-medium">
+                                {pack.description}
+                            </p>
+                            <p className="text-[10px] text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                                {(pack.price / pack.count).toFixed(3)} TND / unité
+                            </p>
+                        </div>
+
+                        {/* Button */}
+                        <button
+                            onClick={() => handleBuy(pack.id, pack.count)}
+                            disabled={loading !== null}
+                            className={`
+                w-full py-3 border-2 border-black font-bold uppercase tracking-wider flex items-center justify-center gap-2
+                active:translate-y-1 active:shadow-none transition-all
+                ${pack.highlight
+                                    ? 'bg-black text-white hover:bg-gray-900'
+                                    : 'bg-white text-black hover:bg-gray-50'
+                                }
+              `}
+                        >
+                            {loading === pack.id ? (
+                                <span className="animate-pulse">Traitement...</span>
+                            ) : (
+                                <>
+                                    <Zap size={16} fill="currentColor" />
+                                    Recharger
+                                </>
+                            )}
+                        </button>
+
+                    </div>
                 ))}
-            </ul>
+            </div>
 
-            <button className={cn(
-                "w-full py-4 rounded-lg font-bold text-sm uppercase tracking-wider neo-border transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
-                recommended
-                    ? "bg-solar-yellow text-black shadow-[4px_4px_0px_0px_#333]"
-                    : "bg-black text-white shadow-[4px_4px_0px_0px_#000] hover:bg-gray-900"
-            )}>
-                Acheter
-            </button>
-        </div>
-    );
-}
-
-export default function SmsTopupPage() {
-    const packs = [
-        {
-            amount: 100,
-            price: 15,
-            features: [
-                "Validité illimitée",
-                "Support prioritaire",
-                "Statistiques d'envoi"
-            ]
-        },
-        {
-            amount: 500,
-            price: 60,
-            recommended: true,
-            features: [
-                "Validité illimitée",
-                "Support prioritaire",
-                "Statistiques détaillées",
-                "Économisez 20%"
-            ]
-        },
-        {
-            amount: 1000,
-            price: 100,
-            features: [
-                "Validité illimitée",
-                "Support dédié",
-                "Statistiques avancées",
-                "Économisez 33%"
-            ]
-        }
-    ];
-
-    return (
-        <div className="max-w-7xl mx-auto">
-            <div className="mb-12">
-                <h1 className="text-4xl font-black uppercase tracking-tight mb-4">Recharge SMS</h1>
-                <p className="text-xl text-gray-600 max-w-2xl">
-                    Choisissez le pack SMS qui correspond à vos besoins. Les SMS n'expirent jamais.
+            {/* Footer Info */}
+            <div className="text-center pt-4">
+                <p className="text-xs text-gray-400 flex items-center justify-center gap-2">
+                    <CreditCard size={12} />
+                    Paiement sécurisé via Konnect (Carte Bancaire / E-Dinar). Les crédits n'expirent jamais.
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {packs.map((pack) => (
-                    <SmsPackCard key={pack.amount} {...pack} />
-                ))}
-            </div>
         </div>
     );
 }

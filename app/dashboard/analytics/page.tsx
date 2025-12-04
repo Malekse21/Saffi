@@ -14,21 +14,21 @@ import {
     Cell,
     Legend,
 } from "recharts";
-import { Clock, Wallet, Star, FileText, Loader2 } from "lucide-react";
+import { Clock, Heart, Star, FileText, Loader2, Wallet } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
 
 export default function AnalyticsPage() {
-    const [timeRange, setTimeRange] = useState<"month" | "year">("month");
+    const [timeRange, setTimeRange] = useState<"day" | "month" | "year">("day");
     const [loading, setLoading] = useState(true);
     const containerRef = useRef<HTMLDivElement>(null);
 
     const [stats, setStats] = useState({
-        timeSaved: "0h 0m",
-        revenueSaved: "0 TND",
-        newReviews: "+0",
+        avgConsultationTime: "0 min",
+        estimatedRevenue: "0 TND",
+        satisfactionRate: "0%",
         patientsPerDay: [] as any[],
         consultationTypes: [] as any[],
         totalPatients: 0,
@@ -36,24 +36,30 @@ export default function AnalyticsPage() {
     });
 
     useEffect(() => {
-        fetchData();
+        fetchData(timeRange);
     }, [timeRange]);
 
-    const fetchData = async () => {
+    const fetchData = async (range: "day" | "month" | "year") => {
         setLoading(true);
         try {
             const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
 
             // Get date range
             const now = new Date();
             let startDate = new Date();
 
-            if (timeRange === "month") {
+            if (range === "day") {
+                // Start of today
+                startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            } else if (range === "month") {
                 startDate = new Date(now.getFullYear(), now.getMonth(), 1);
             } else {
                 startDate = new Date(now.getFullYear(), 0, 1);
             }
 
+            // Fetch patients data
             const { data: patients, error } = await supabase
                 .from("patients")
                 .select("*")
@@ -61,7 +67,14 @@ export default function AnalyticsPage() {
 
             if (error) throw error;
 
-            processData(patients || []);
+            // Fetch feedback data
+            const { data: feedback } = await supabase
+                .from("patient_feedback")
+                .select("rating")
+                .eq("user_id", user.id)
+                .gte("created_at", startDate.toISOString());
+
+            processData(patients || [], feedback || [], range);
         } catch (error) {
             console.error("Error fetching analytics:", error);
             toast.error("Erreur lors du chargement des statistiques");
@@ -70,16 +83,34 @@ export default function AnalyticsPage() {
         }
     };
 
-    const processData = (patients: any[]) => {
-        // 1. ROI Calculations
-        // Assumption: 15 mins saved per patient, 40 TND revenue per patient
+    const processData = (patients: any[], feedback: any[], range: "day" | "month" | "year") => {
         const totalPatients = patients.length;
-        const totalMinutesSaved = totalPatients * 15;
-        const hours = Math.floor(totalMinutesSaved / 60);
-        const minutes = totalMinutesSaved % 60;
-        const revenue = totalPatients * 40; // Estimate
 
-        // 2. Consultation Types
+        // 1. Calculate Average Consultation Time (for completed patients)
+        let avgConsultationMinutes = 0;
+        const completedPatients = patients.filter(p => p.status === 'completed' && p.created_at && p.updated_at);
+        if (completedPatients.length > 0) {
+            const totalConsultationTime = completedPatients.reduce((acc, p) => {
+                const created = new Date(p.created_at).getTime();
+                const updated = new Date(p.updated_at).getTime();
+                return acc + (updated - created);
+            }, 0);
+            avgConsultationMinutes = Math.round(totalConsultationTime / completedPatients.length / 1000 / 60);
+        }
+
+        // 2. Calculate Estimated Revenue
+        const consultationPrice = 50; // TND per consultation
+        const revenue = completedPatients.length * consultationPrice;
+        const formattedRevenue = revenue.toLocaleString('fr-TN');
+
+        // 3. Calculate Satisfaction Rate from Feedback
+        let satisfactionRate = 0;
+        if (feedback.length > 0) {
+            const positiveRatings = feedback.filter(f => f.rating >= 4).length;
+            satisfactionRate = Math.round((positiveRatings / feedback.length) * 100);
+        }
+
+        // 4. Consultation Types
         const rdvCount = patients.filter(p => p.type === 'rdv').length;
         const walkInCount = patients.filter(p => p.type === 'walk-in').length;
         const rdvPercentage = totalPatients > 0 ? Math.round((rdvCount / totalPatients) * 100) : 0;
@@ -89,10 +120,25 @@ export default function AnalyticsPage() {
             { name: "Sur RDV", value: rdvCount },
         ];
 
-        // 3. Patients Volume (Bar Chart)
+        // 5. Patients Volume (Bar Chart)
         let patientsPerDay = [];
 
-        if (timeRange === "month") {
+        if (range === "day") {
+            // Group by hour (0-23)
+            const hourlyCounts = new Array(24).fill(0);
+
+            patients.forEach(p => {
+                const hour = new Date(p.created_at).getHours();
+                if (hour >= 0 && hour <= 23) {
+                    hourlyCounts[hour]++;
+                }
+            });
+
+            patientsPerDay = hourlyCounts.map((count, index) => ({
+                name: `${index}h`,
+                patients: count
+            }));
+        } else if (range === "month") {
             // Group by day of month (1-31)
             const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
             const dailyCounts = new Array(daysInMonth).fill(0);
@@ -127,9 +173,9 @@ export default function AnalyticsPage() {
         }
 
         setStats({
-            timeSaved: `${hours}h ${minutes}m`,
-            revenueSaved: `${revenue} TND`,
-            newReviews: `+${Math.floor(totalPatients / 10)}`, // Mock: 1 review per 10 patients
+            avgConsultationTime: `${avgConsultationMinutes} min`,
+            estimatedRevenue: `${formattedRevenue} TND`,
+            satisfactionRate: `${satisfactionRate}%`,
             patientsPerDay,
             consultationTypes,
             totalPatients,
@@ -157,11 +203,32 @@ export default function AnalyticsPage() {
                 format: "a4"
             });
 
-            const imgWidth = 297; // A4 landscape width
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            const pdfWidth = 297;
+            const pdfHeight = 210;
+            const imgProps = pdf.getImageProperties(imgData);
+            const imgRatio = imgProps.width / imgProps.height;
 
-            pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
-            pdf.save(`rapport_analytique_${timeRange}_${new Date().toISOString().split('T')[0]}.pdf`);
+            // Calculate dimensions to fit within the page while maintaining aspect ratio
+            let imgWidth = pdfWidth;
+            let imgHeight = pdfWidth / imgRatio;
+
+            // If image is taller than PDF (relative to width), scale by height
+            if (imgHeight > pdfHeight) {
+                imgHeight = pdfHeight;
+                imgWidth = pdfHeight * imgRatio;
+            }
+
+            // Center the image
+            const x = (pdfWidth - imgWidth) / 2;
+            const y = (pdfHeight - imgHeight) / 2;
+
+            pdf.addImage(imgData, "PNG", x, y, imgWidth, imgHeight);
+
+            // Format date for filename (e.g., 03-12-2025)
+            const dateStr = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
+            const rangeStr = timeRange === 'day' ? 'Journalier' : timeRange === 'month' ? 'Mensuel' : 'Annuel';
+
+            pdf.save(`Rapport_Activite_Saffi_${rangeStr}_${dateStr}.pdf`);
 
             toast.success("Rapport téléchargé avec succès", { id: toastId });
         } catch (error) {
@@ -182,6 +249,12 @@ export default function AnalyticsPage() {
                 <div className="flex items-center gap-3" data-html2canvas-ignore>
                     {/* Date Filter */}
                     <div className="flex bg-[#ffffff] border-2 border-[#000000] p-1 shadow-[4px_4px_0px_0px_#000000]">
+                        <button
+                            onClick={() => setTimeRange("day")}
+                            className={`px-4 py-1.5 font-bold uppercase text-xs transition-all ${timeRange === "day" ? "bg-[#000000] text-[#ffffff]" : "text-[#6b7280] hover:bg-[#f3f4f6]"}`}
+                        >
+                            Aujourd'hui
+                        </button>
                         <button
                             onClick={() => setTimeRange("month")}
                             className={`px-4 py-1.5 font-bold uppercase text-xs transition-all ${timeRange === "month" ? "bg-[#000000] text-[#ffffff]" : "text-[#6b7280] hover:bg-[#f3f4f6]"}`}
@@ -215,45 +288,45 @@ export default function AnalyticsPage() {
                 <>
                     {/* Section 1: ROI Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 shrink-0">
-                        {/* Card 1: Time Saved */}
+                        {/* Card 1: Average Consultation Time */}
                         <div className="bg-[#fde047] border-2 border-[#000000] p-5 shadow-[4px_4px_0px_0px_#000000] flex flex-col justify-between transition-transform hover:-translate-y-1">
                             <div className="flex justify-between items-start mb-2">
                                 <div className="p-2 bg-[#ffffff] border-2 border-[#000000] rounded-none">
                                     <Clock className="h-5 w-5 text-[#000000]" />
                                 </div>
-                                <span className="font-black text-4xl tracking-tighter">{stats.timeSaved}</span>
+                                <span className="font-black text-4xl tracking-tighter">{stats.avgConsultationTime}</span>
                             </div>
                             <div>
-                                <h3 className="font-black text-lg uppercase mb-0.5">Temps Gagné</h3>
-                                <p className="font-medium text-[#333333] text-sm leading-tight">Estimé sur {stats.totalPatients} patients.</p>
+                                <h3 className="font-black text-lg uppercase mb-0.5">Temps Moyen</h3>
+                                <p className="font-medium text-[#333333] text-sm leading-tight">Durée moyenne par patient.</p>
                             </div>
                         </div>
 
-                        {/* Card 2: Revenue Saved */}
+                        {/* Card 2: Estimated Revenue */}
                         <div className="bg-[#86efac] border-2 border-[#000000] p-5 shadow-[4px_4px_0px_0px_#000000] flex flex-col justify-between transition-transform hover:-translate-y-1">
                             <div className="flex justify-between items-start mb-2">
                                 <div className="p-2 bg-[#ffffff] border-2 border-[#000000] rounded-none">
                                     <Wallet className="h-5 w-5 text-[#000000]" />
                                 </div>
-                                <span className="font-black text-4xl tracking-tighter">{stats.revenueSaved}</span>
+                                <span className="font-black text-4xl tracking-tighter">{stats.estimatedRevenue}</span>
                             </div>
                             <div>
                                 <h3 className="font-black text-lg uppercase mb-0.5">Revenu Estimé</h3>
-                                <p className="font-medium text-[#333333] text-sm leading-tight">Basé sur l'activité.</p>
+                                <p className="font-medium text-[#333333] text-sm leading-tight">Basé sur les consultations.</p>
                             </div>
                         </div>
 
-                        {/* Card 3: Reputation */}
+                        {/* Card 3: Satisfaction Rate */}
                         <div className="bg-[#d8b4fe] border-2 border-[#000000] p-5 shadow-[4px_4px_0px_0px_#000000] flex flex-col justify-between transition-transform hover:-translate-y-1">
                             <div className="flex justify-between items-start mb-2">
                                 <div className="p-2 bg-[#ffffff] border-2 border-[#000000] rounded-none">
-                                    <Star className="h-5 w-5 text-[#000000]" />
+                                    <Heart className="h-5 w-5 text-[#000000]" />
                                 </div>
-                                <span className="font-black text-4xl tracking-tighter">{stats.newReviews}</span>
+                                <span className="font-black text-4xl tracking-tighter">{stats.satisfactionRate}</span>
                             </div>
                             <div>
-                                <h3 className="font-black text-lg uppercase mb-0.5">Avis Google</h3>
-                                <p className="font-medium text-[#333333] text-sm leading-tight">Nouveaux avis potentiels.</p>
+                                <h3 className="font-black text-lg uppercase mb-0.5">Satisfaction</h3>
+                                <p className="font-medium text-[#333333] text-sm leading-tight">Avis positifs (4-5★).</p>
                             </div>
                         </div>
                     </div>
@@ -264,7 +337,7 @@ export default function AnalyticsPage() {
                         <div className="lg:col-span-2 bg-[#ffffff] border-2 border-[#000000] p-5 shadow-[4px_4px_0px_0px_#000000] flex flex-col h-full">
                             <h3 className="font-black text-xl uppercase mb-4 flex items-center gap-2">
                                 <span className="w-3 h-6 bg-[#000000] block"></span>
-                                Volume Patients ({timeRange === 'month' ? 'Journalier' : 'Mensuel'})
+                                Volume Patients ({timeRange === 'day' ? 'Horaire' : timeRange === 'month' ? 'Journalier' : 'Mensuel'})
                             </h3>
                             <div className="flex-1 w-full min-h-0">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -275,7 +348,7 @@ export default function AnalyticsPage() {
                                             axisLine={{ stroke: '#000000', strokeWidth: 2 }}
                                             tickLine={false}
                                             tick={{ fill: '#000000', fontSize: 12, fontWeight: 'bold', dy: 10 }}
-                                            interval={timeRange === 'month' ? 2 : 0} // Show every 3rd day for month view to avoid crowding
+                                            interval={timeRange === 'day' ? 1 : timeRange === 'month' ? 2 : 0} // Show every hour for day, every 3rd day for month, all months for year
                                         />
                                         <YAxis
                                             axisLine={{ stroke: '#000000', strokeWidth: 2 }}
@@ -289,7 +362,7 @@ export default function AnalyticsPage() {
                                                 if (active && payload && payload.length) {
                                                     return (
                                                         <div className="bg-[#ffffff] border-2 border-[#000000] p-2 shadow-[4px_4px_0px_0px_#000000]">
-                                                            <p className="font-bold text-sm mb-1">{timeRange === 'month' ? `Jour ${label}` : label}</p>
+                                                            <p className="font-bold text-sm mb-1">{timeRange === 'day' ? `${label}` : timeRange === 'month' ? `Jour ${label}` : label}</p>
                                                             <p className="font-black text-lg">{payload[0].value} Patients</p>
                                                         </div>
                                                     );
@@ -328,19 +401,6 @@ export default function AnalyticsPage() {
                                                 <Cell key={`cell-${index}`} fill={index === 0 ? "#ffffff" : "#000000"} />
                                             ))}
                                         </Pie>
-                                        <Tooltip
-                                            content={({ active, payload }) => {
-                                                if (active && payload && payload.length) {
-                                                    return (
-                                                        <div className="bg-[#ffffff] border-2 border-[#000000] p-2 shadow-[4px_4px_0px_0px_#000000]">
-                                                            <p className="font-bold text-sm mb-1">{payload[0].name}</p>
-                                                            <p className="font-black text-lg">{payload[0].value} Patients</p>
-                                                        </div>
-                                                    );
-                                                }
-                                                return null;
-                                            }}
-                                        />
                                         <Legend
                                             verticalAlign="bottom"
                                             height={36}

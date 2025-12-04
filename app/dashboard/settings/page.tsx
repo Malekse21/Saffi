@@ -173,14 +173,6 @@ export default function SettingsPage() {
                         {activeTab === "billing" && (
                             <div className="space-y-6">
                                 <div className="flex items-center justify-between rounded-lg border-2 border-black bg-gray-50 p-6">
-                                    <div className="space-y-1">
-                                        <h3 className="font-bold">Solde SMS</h3>
-                                        <p className="text-4xl font-black">0</p>
-                                    </div>
-                                    <button className="flex items-center gap-2 border-2 border-black bg-black px-6 py-3 font-bold text-white shadow-[4px_4px_0px_0px_#000] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:bg-gray-900">
-                                        <CreditCard className="h-5 w-5" />
-                                        Recharger
-                                    </button>
                                 </div>
                             </div>
                         )}

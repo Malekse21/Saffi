@@ -9,6 +9,8 @@ import {
     Sun,
     Coffee,
     ArrowRight,
+    Stethoscope,
+    Search,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useRouter } from 'next/navigation';
@@ -18,6 +20,7 @@ import { createClient } from '@/utils/supabase/client';
 type ConsultationDuration = 15 | 20 | 30 | 45;
 
 interface OnboardingData {
+    specialty: string;
     duration: ConsultationDuration | null;
     openingTime: string;
     closingTime: string;
@@ -31,12 +34,13 @@ const saveStepData = async (data: Partial<OnboardingData>, isComplete: boolean =
 
     if (user) {
         const updateData: any = {
+            specialty: data.specialty,
             consultation_duration: data.duration,
             opening_time: data.openingTime,
             closing_time: data.closingTime,
             has_lunch_break: data.hasLunchBreak,
             clinic_id: user.user_metadata?.clinic_id, // Store clinic_id from metadata
-            plan: 'connect', // Hardcoded to connect as requested
+            plan: 'trial', // Set to trial initially
         };
 
         // Only set onboarding_completed to true on final step
@@ -61,6 +65,7 @@ export default function OnboardingWizard() {
     const [doctorName, setDoctorName] = useState('');
 
     const [formData, setFormData] = useState<OnboardingData>({
+        specialty: '',
         duration: null,
         openingTime: '08:00',
         closingTime: '17:00',
@@ -97,8 +102,8 @@ export default function OnboardingWizard() {
         router.push('/dashboard');
     };
 
-    // Progress calculation (Total steps = 3: Duration, Schedule, Success)
-    const progress = (step / 3) * 100;
+    // Progress calculation (Total steps = 4: Specialty, Duration, Schedule, Success)
+    const progress = (step / 4) * 100;
 
     // Animation Variants
     const slideVariants = {
@@ -135,11 +140,21 @@ export default function OnboardingWizard() {
                 </div>
 
                 {/* Content Area */}
-                <div className="p-8 md:p-12 min-h-[500px] flex flex-col justify-center">
+                <div className="p-8 md:p-12 min-h-[600px] flex flex-col justify-center">
                     <AnimatePresence mode='wait' custom={direction}>
                         {step === 1 && (
-                            <StepDuration
+                            <StepSpecialty
                                 key="step1"
+                                custom={direction}
+                                variants={slideVariants}
+                                value={formData.specialty}
+                                onChange={(val: string) => setFormData({ ...formData, specialty: val })}
+                                onNext={nextStep}
+                            />
+                        )}
+                        {step === 2 && (
+                            <StepDuration
+                                key="step2"
                                 custom={direction}
                                 variants={slideVariants}
                                 value={formData.duration}
@@ -147,9 +162,9 @@ export default function OnboardingWizard() {
                                 onNext={nextStep}
                             />
                         )}
-                        {step === 2 && (
+                        {step === 3 && (
                             <StepSchedule
-                                key="step2"
+                                key="step3"
                                 custom={direction}
                                 variants={slideVariants}
                                 data={formData}
@@ -157,9 +172,9 @@ export default function OnboardingWizard() {
                                 onNext={nextStep}
                             />
                         )}
-                        {step === 3 && (
+                        {step === 4 && (
                             <StepSuccess
-                                key="step3"
+                                key="step4"
                                 custom={direction}
                                 variants={slideVariants}
                                 doctorName={doctorName || "Docteur"}
@@ -169,10 +184,10 @@ export default function OnboardingWizard() {
                     </AnimatePresence>
                 </div>
 
-                {/* Footer info (Steps 1-2 only) */}
-                {step < 3 && (
+                {/* Footer info (Steps 1-3 only) */}
+                {step < 4 && (
                     <div className="bg-gray-50 border-t-2 border-black p-4 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
-                        Étape {step} sur 2 • Configuration Initiale
+                        Étape {step} sur 3 • Configuration Initiale
                     </div>
                 )}
             </div>
@@ -180,7 +195,84 @@ export default function OnboardingWizard() {
     );
 }
 
-// --- STEP 1: DURATION ---
+// --- STEP 1: SPECIALTY ---
+function StepSpecialty({ custom, variants, value, onChange, onNext }: any) {
+    const [searchTerm, setSearchTerm] = useState("");
+    const specialties = [
+        "Médecine Générale", "Pédiatrie", "Cardiologie", "Dermatologie",
+        "Gynécologie", "Ophtalmologie", "Psychiatrie", "Dentiste",
+        "Orthopédie", "ORL", "Neurologie", "Rhumatologie",
+        "Endocrinologie", "Gastro-entérologie", "Pneumologie", "Urologie",
+        "Chirurgie Générale", "Chirurgie Esthétique", "Radiologie", "Kinésithérapie",
+        "Nutrition", "Psychologie", "Ostéopathie", "Autre"
+    ];
+
+    const filteredSpecialties = specialties.filter(s =>
+        s.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+        <motion.div
+            custom={custom}
+            variants={variants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="flex flex-col gap-6 h-full"
+        >
+            <div className="space-y-2">
+                <h2 className="font-display text-4xl font-bold tracking-tight">Votre Spécialité.</h2>
+                <p className="text-gray-500 font-medium">Quelle est votre domaine d'expertise ?</p>
+            </div>
+
+            <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                    type="text"
+                    placeholder="Rechercher..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full h-10 pl-10 pr-3 bg-white border-2 border-black rounded-md text-sm placeholder:text-gray-400 focus:outline-none focus:bg-yellow-50 transition-colors"
+                />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 overflow-y-auto max-h-[300px] pr-2 scrollbar-thin scrollbar-thumb-black scrollbar-track-gray-100">
+                {filteredSpecialties.map((spec) => (
+                    <motion.button
+                        key={spec}
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => onChange(spec)}
+                        className={`
+              p-3 border-2 border-black text-left flex items-center gap-2 transition-all rounded-md
+              ${value === spec
+                                ? 'bg-black text-white shadow-[2px_2px_0px_0px_#2C2B57]'
+                                : 'bg-white hover:bg-gray-50 shadow-[2px_2px_0px_0px_#000]'
+                            }
+            `}
+                    >
+                        <Stethoscope size={16} className={value === spec ? 'text-white' : 'text-gray-400'} />
+                        <span className="font-bold text-sm truncate">{spec}</span>
+                    </motion.button>
+                ))}
+            </div>
+
+            <button
+                disabled={!value}
+                onClick={onNext}
+                className={`
+          mt-auto w-full py-4 border-2 border-black font-bold text-lg uppercase tracking-wider flex items-center justify-center gap-2
+          ${value ? 'bg-[#2C2B57] text-white hover:bg-black shadow-[4px_4px_0px_0px_#000]' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}
+        `}
+            >
+                Suivant <ChevronRight />
+            </button>
+        </motion.div>
+    );
+}
+
+// --- STEP 2: DURATION ---
 function StepDuration({ custom, variants, value, onChange, onNext }: any) {
     const options: { val: ConsultationDuration; label: string; desc: string }[] = [
         { val: 15, label: "15 min", desc: "Flash / Express" },
@@ -241,7 +333,7 @@ function StepDuration({ custom, variants, value, onChange, onNext }: any) {
     );
 }
 
-// --- STEP 2: SCHEDULE ---
+// --- STEP 3: SCHEDULE ---
 function StepSchedule({ custom, variants, data, onChange, onNext }: any) {
     return (
         <motion.div
@@ -316,7 +408,7 @@ function StepSchedule({ custom, variants, data, onChange, onNext }: any) {
     );
 }
 
-// --- STEP 3: SUCCESS ---
+// --- STEP 4: SUCCESS ---
 function StepSuccess({ custom, variants, doctorName, onComplete }: any) {
     const qrValue = `https://saffi.tn/join/${doctorName.replace(/\s+/g, '-').toLowerCase()}`;
 

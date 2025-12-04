@@ -200,9 +200,6 @@ export default function AccueilPage() {
                             <h2 className="text-2xl font-bold uppercase">
                                 File d'Attente
                             </h2>
-                            <p className="text-sm font-medium text-gray-600">
-                                Glisser pour réorganiser
-                            </p>
                         </div>
 
                         {isLoading ? (
