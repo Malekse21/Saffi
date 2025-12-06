@@ -13,6 +13,9 @@ export interface Patient {
     position: number;
     created_at: string;
     updated_at: string;
+    motif?: string;
+    is_priority?: boolean;
+    appointmentTime?: string;
 }
 
 export interface QueueSettings {
@@ -113,7 +116,9 @@ export async function addPatient(
     name: string,
     phone?: string,
     type: 'walk-in' | 'rdv' = 'walk-in',
-    rdvTime?: string
+    rdvTime?: string,
+    motif: string = 'consultation',
+    isPriority: boolean = false
 ): Promise<Patient> {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -130,7 +135,9 @@ export async function addPatient(
         status: 'waiting',
         type,
         phone: phone || null,
-        position
+        position,
+        motif,
+        is_priority: isPriority
     };
 
     if (rdvTime) {
@@ -155,7 +162,8 @@ export async function addPatientByClinicId(
     name: string,
     phone?: string,
     type: 'walk-in' | 'rdv' = 'walk-in',
-    rdvTime?: string
+    rdvTime?: string,
+    motif: string = 'consultation'
 ): Promise<Patient> {
     const supabase = createClient();
 
@@ -248,7 +256,8 @@ export async function addPatientByClinicId(
         status: 'waiting',
         type,
         phone: phone || null,
-        position
+        position,
+        motif
     };
 
     if (rdvTime) {
@@ -285,6 +294,26 @@ export async function updatePatientStatus(
     const { data, error } = await supabase
         .from('patients')
         .update({ status })
+        .eq('id', patientId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+/**
+ * Update patient details
+ */
+export async function updatePatient(
+    patientId: string,
+    updates: Partial<Patient>
+): Promise<Patient> {
+    const supabase = createClient();
+
+    const { data, error } = await supabase
+        .from('patients')
+        .update(updates)
         .eq('id', patientId)
         .select()
         .single();

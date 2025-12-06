@@ -1,39 +1,40 @@
-"use client";
-
-import { GripVertical, MessageCircle } from "lucide-react";
+import { GripVertical, MessageCircle, MoreVertical, Edit, AlertTriangle, Trash2, UserX, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-export interface Patient {
-    id: string;
-    name: string;
-    phone?: string;
-    status: 'waiting' | 'serving' | 'away' | 'completed';
-    type: 'walk-in' | 'rdv';
-    appointmentTime?: string;
-    isPriority?: boolean;
-    ticketNumber?: string;
-    position?: number;
-}
+import { Patient } from "@/lib/patients";
+import { MOTIFS } from "@/lib/motifs";
+import { useState } from "react";
 
 interface PatientCardProps {
     patient: Patient;
     enableDrag?: boolean;
     showSMSStatus?: boolean;
+    onEdit?: (patient: Patient) => void;
+    onMarkUrgency?: (patient: Patient) => void;
+    onDelete?: (patient: Patient) => void;
+    onStatusChange?: (patient: Patient, newStatus: 'waiting' | 'away') => void;
 }
 
 export function PatientCard({
     patient,
     enableDrag = false,
-    showSMSStatus = false
+    showSMSStatus = false,
+    onEdit,
+    onMarkUrgency,
+    onDelete,
+    onStatusChange
 }: PatientCardProps) {
     const isAway = patient.status === 'away';
-    const isRdv = patient.type === 'rdv';
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+    // Find motif details
+    const motif = MOTIFS.find(m => m.value === patient.motif);
 
     return (
         <div
             className={cn(
                 "relative border-2 border-black p-4 flex items-center justify-between bg-white shadow-[4px_4px_0px_0px_#000] transition-all",
-                isAway && "bg-[linear-gradient(135deg,#FACC15_25%,#ffffff_25%,#ffffff_50%,#FACC15_50%,#FACC15_75%,#ffffff_75%,#ffffff_100%)] bg-[length:20px_20px]"
+                isAway && "bg-gray-200 grayscale-[0.5]",
+                isMenuOpen ? "z-50" : "z-0"
             )}
         >
             <div className="flex items-center gap-4 flex-1">
@@ -45,30 +46,35 @@ export function PatientCard({
                 )}
 
                 <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                         {/* Ticket Number Badge */}
-                        {patient.ticketNumber && (
+                        {patient.ticket_number && (
                             <span className="bg-black text-white px-2 py-0.5 text-xs font-bold border-2 border-black">
-                                {patient.ticketNumber}
+                                {patient.ticket_number}
                             </span>
                         )}
 
-                        {/* Type Badge */}
-                        {isRdv ? (
-                            <span className="bg-[#9333EA] text-white px-2 py-0.5 text-xs font-bold uppercase tracking-wide border-2 border-black">
-                                RDV
-                            </span>
-                        ) : (
-                            <span className="bg-[#10B981] text-white px-2 py-0.5 text-xs font-bold uppercase tracking-wide border-2 border-black">
-                                Walk-in
+                        {/* Motif Badge */}
+                        {motif && (
+                            <span className={cn(
+                                "px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide border-2 border-black rounded-full",
+                                motif.color,
+                                motif.value === 'urgence' ? 'text-white' : 'text-black'
+                            )}>
+                                {motif.label}
                             </span>
                         )}
 
-                        {/* Priority Badge */}
-                        {patient.isPriority && (
-                            <span className="bg-[#EF4444] text-white px-2 py-0.5 text-xs font-bold uppercase tracking-wide border-2 border-black">
-                                Priority
+                        {/* RDV Time Badge */}
+                        {patient.appointmentTime && (
+                            <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide border-2 border-black rounded-full bg-[#9333EA] text-white">
+                                {patient.appointmentTime}
                             </span>
+                        )}
+
+                        {/* Priority Indicator (Small dot if priority but not urgency motif) */}
+                        {patient.is_priority && motif?.value !== 'urgence' && (
+                            <span className="h-2 w-2 rounded-full bg-red-500 border border-black" title="Prioritaire" />
                         )}
                     </div>
 
@@ -87,6 +93,68 @@ export function PatientCard({
                         <MessageCircle className="h-5 w-5 text-[#2C2B57]" />
                     </div>
                 )}
+
+                {/* Menu Button */}
+                <div className="relative">
+                    <button
+                        onClick={() => setIsMenuOpen(!isMenuOpen)}
+                        className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                        <MoreVertical className="h-5 w-5 text-gray-600" />
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {isMenuOpen && (
+                        <>
+                            <div
+                                className="fixed inset-0 z-10"
+                                onClick={() => setIsMenuOpen(false)}
+                            />
+                            <div className="absolute right-0 top-full mt-1 w-48 bg-white border-2 border-black shadow-[4px_4px_0px_0px_#000] z-20 py-1">
+                                <button
+                                    onClick={() => {
+                                        onEdit?.(patient);
+                                        setIsMenuOpen(false);
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-sm font-bold hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                    <Edit className="h-4 w-4" /> Modifier
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        onStatusChange?.(patient, isAway ? 'waiting' : 'away');
+                                        setIsMenuOpen(false);
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-sm font-bold hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                    {isAway ? (
+                                        <><UserCheck className="h-4 w-4" /> Marquer Présent</>
+                                    ) : (
+                                        <><UserX className="h-4 w-4" /> Marquer Absent</>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        onMarkUrgency?.(patient);
+                                        setIsMenuOpen(false);
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                >
+                                    <AlertTriangle className="h-4 w-4" /> Marquer Urgence
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        onDelete?.(patient);
+                                        setIsMenuOpen(false);
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-gray-100"
+                                >
+                                    <Trash2 className="h-4 w-4" /> Supprimer
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
     );

@@ -1,11 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PatientCard, Patient } from "@/components/dashboard/PatientCard";
+import { PatientCard } from "@/components/PatientCard";
+import { Patient, updatePatient } from "@/lib/patients";
 import { AddPatientModal } from "@/components/dashboard/AddPatientModal";
+import { EditPatientModal } from "@/components/dashboard/EditPatientModal";
 import { Tv, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { getPatients, subscribeToPatients, updatePatientStatus } from "@/lib/patients";
+import { getPatients, subscribeToPatients, updatePatientStatus, deletePatient } from "@/lib/patients";
+import { ExcelImporter } from "@/components/ExcelImporter";
+import { ConfirmationModal } from "@/components/dashboard/ConfirmationModal";
 
 type DBPatient = {
     id: string;
@@ -19,12 +23,31 @@ type DBPatient = {
     phone?: string;
     created_at: string;
     updated_at: string;
+    motif?: string;
+    is_priority?: boolean;
 };
 
 export default function AccueilPage() {
     const [patients, setPatients] = useState<DBPatient[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+
+    // Confirmation Modal State
+    const [confirmation, setConfirmation] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        action: () => void;
+        isDestructive?: boolean;
+    }>({
+        isOpen: false,
+        title: "",
+        message: "",
+        action: () => { },
+        isDestructive: false
+    });
 
     // Fetch patients on mount
     useEffect(() => {
@@ -60,9 +83,9 @@ export default function AccueilPage() {
     };
 
     // Map database status to component status
-    const mapStatus = (dbStatus: string): 'waiting' | 'serving' | 'away' | 'completed' => {
+    const mapStatus = (dbStatus: string): 'waiting' | 'active' | 'away' | 'completed' => {
         switch (dbStatus) {
-            case 'active': return 'serving';
+            case 'active': return 'active';
             case 'waiting': return 'waiting';
             case 'away': return 'away';
             case 'completed': return 'completed';
@@ -73,14 +96,20 @@ export default function AccueilPage() {
     // Transform patient data to match component interface
     const transformPatient = (p: DBPatient, position: number = 1): Patient => ({
         id: p.id,
+        user_id: p.user_id,
         name: p.name,
         phone: p.phone,
         status: mapStatus(p.status),
         type: p.type,
+        arrival_time: p.arrival_time,
+        rdv_time: p.rdv_time,
         appointmentTime: p.rdv_time ? new Date(p.rdv_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : undefined,
-        isPriority: false,
+        is_priority: p.is_priority,
         position: position,
-        ticketNumber: p.ticket_number
+        ticket_number: p.ticket_number,
+        motif: p.motif,
+        created_at: p.created_at,
+        updated_at: p.updated_at
     });
 
     const activePatient = patients.find(p => p.status === 'active');
@@ -125,6 +154,67 @@ export default function AccueilPage() {
         setIsModalOpen(true);
     };
 
+    const handleEditPatient = (patient: Patient) => {
+        setEditingPatient(patient);
+        setIsEditModalOpen(true);
+    };
+
+    const handleMarkUrgency = (patient: Patient) => {
+        setConfirmation({
+            isOpen: true,
+            title: "Marquer comme Urgent",
+            message: `Voulez-vous marquer ${patient.name} comme urgent ? Cela le placera en tête de file.`,
+            action: async () => {
+                try {
+                    await updatePatient(patient.id, { is_priority: true, motif: 'urgence' });
+
+                    const waitingPatients = patients.filter(p => p.status === 'waiting' && p.id !== patient.id);
+                    const newOrder = [patient.id, ...waitingPatients.map(p => p.id)];
+
+                    const { reorderPatients } = await import("@/lib/patients");
+                    await reorderPatients(newOrder);
+
+                    toast.success("Patient marqué comme urgent et déplacé en tête de file");
+                    loadPatients();
+                } catch (error) {
+                    console.error(error);
+                    toast.error("Erreur lors de la mise à jour");
+                }
+            },
+            isDestructive: false
+        });
+    };
+
+    const handleDeletePatient = (patient: Patient) => {
+        setConfirmation({
+            isOpen: true,
+            title: "Supprimer le Patient",
+            message: `Voulez-vous vraiment supprimer ${patient.name} ? Cette action est irréversible.`,
+            action: async () => {
+                try {
+                    await deletePatient(patient.id);
+                    toast.success("Patient supprimé");
+                    loadPatients();
+                } catch (error) {
+                    console.error(error);
+                    toast.error("Erreur lors de la suppression");
+                }
+            },
+            isDestructive: true
+        });
+    };
+
+    const handleStatusChange = async (patient: Patient, newStatus: 'waiting' | 'away') => {
+        try {
+            await updatePatientStatus(patient.id, newStatus);
+            toast.success(`Statut mis à jour: ${newStatus === 'away' ? 'Absent' : 'En attente'}`);
+            loadPatients();
+        } catch (error) {
+            console.error(error);
+            toast.error("Erreur lors de la mise à jour du statut");
+        }
+    };
+
     return (
         <>
             <div className="space-y-6">
@@ -158,7 +248,10 @@ export default function AccueilPage() {
                         {activePatient ? (
                             <PatientCard
                                 patient={transformPatient(activePatient)}
-                                isActive={true}
+                                onEdit={handleEditPatient}
+                                onMarkUrgency={handleMarkUrgency}
+                                onDelete={handleDeletePatient}
+                                onStatusChange={handleStatusChange}
                             />
                         ) : (
                             <div className="border-2 border-black border-dashed p-8 text-center bg-gray-50">
@@ -191,6 +284,7 @@ export default function AccueilPage() {
                                 <Plus className="h-5 w-5" />
                                 AJOUTER PATIENT
                             </button>
+                            <ExcelImporter onImportSuccess={loadPatients} />
                         </div>
                     </div>
 
@@ -213,6 +307,10 @@ export default function AccueilPage() {
                                         <PatientCard
                                             key={patient.id}
                                             patient={patient}
+                                            onEdit={handleEditPatient}
+                                            onMarkUrgency={handleMarkUrgency}
+                                            onDelete={handleDeletePatient}
+                                            onStatusChange={handleStatusChange}
                                         />
                                     ))
                                 ) : (
@@ -231,6 +329,24 @@ export default function AccueilPage() {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onPatientAdded={loadPatients}
+            />
+
+            {/* Edit Patient Modal */}
+            <EditPatientModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                patient={editingPatient}
+                onPatientUpdated={loadPatients}
+            />
+
+            {/* Confirmation Modal */}
+            <ConfirmationModal
+                isOpen={confirmation.isOpen}
+                onClose={() => setConfirmation(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmation.action}
+                title={confirmation.title}
+                message={confirmation.message}
+                isDestructive={confirmation.isDestructive}
             />
         </>
     );

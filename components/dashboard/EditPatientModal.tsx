@@ -5,14 +5,16 @@ import { X, User, Phone, Calendar, Clock, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MOTIFS, MotifValue } from "@/lib/motifs";
 import { toast } from "sonner";
+import { Patient } from "@/lib/patients";
 
-interface AddPatientModalProps {
+interface EditPatientModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onPatientAdded: () => void;
+    patient: Patient | null;
+    onPatientUpdated: () => void;
 }
 
-export function AddPatientModal({ isOpen, onClose, onPatientAdded }: AddPatientModalProps) {
+export function EditPatientModal({ isOpen, onClose, patient, onPatientUpdated }: EditPatientModalProps) {
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
     const [type, setType] = useState<"walk-in" | "rdv">("walk-in");
@@ -21,17 +23,33 @@ export function AddPatientModal({ isOpen, onClose, onPatientAdded }: AddPatientM
     const [isPriority, setIsPriority] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    useEffect(() => {
+        if (patient) {
+            setName(patient.name);
+            setPhone(patient.phone || "");
+            setType(patient.type);
+            if (patient.rdv_time) {
+                const date = new Date(patient.rdv_time);
+                setRdvTime(`${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`);
+            } else {
+                setRdvTime("");
+            }
+            setSelectedMotif((patient.motif as MotifValue) || "consultation");
+            setIsPriority(patient.is_priority || false);
+        }
+    }, [patient]);
+
     // Auto-set priority when "Urgence" is selected
     useEffect(() => {
         if (selectedMotif === 'urgence') {
             setIsPriority(true);
-        } else {
-            setIsPriority(false);
         }
     }, [selectedMotif]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!patient) return;
 
         if (!name.trim()) {
             toast.error("Le nom est obligatoire");
@@ -70,30 +88,22 @@ export function AddPatientModal({ isOpen, onClose, onPatientAdded }: AddPatientM
                 formattedRdvTime = today.toISOString();
             }
 
-            const { addPatient } = await import("@/lib/patients");
-            await addPatient(
-                name.trim(),
-                phone.trim(),
+            const { updatePatient } = await import("@/lib/patients");
+            await updatePatient(patient.id, {
+                name: name.trim(),
+                phone: phone.trim(),
                 type,
-                formattedRdvTime,
-                selectedMotif,
-                isPriority
-            );
+                rdv_time: formattedRdvTime,
+                motif: selectedMotif,
+                is_priority: isPriority
+            });
 
-            onPatientAdded();
+            onPatientUpdated();
             onClose();
-
-            // Reset form
-            setName("");
-            setPhone("");
-            setType("walk-in");
-            setRdvTime("");
-            setSelectedMotif("consultation");
-            setIsPriority(false);
-            toast.success("Patient ajouté avec succès!");
+            toast.success("Patient modifié avec succès!");
         } catch (error) {
-            console.error("Error adding patient:", error);
-            toast.error("Erreur lors de l'ajout du patient");
+            console.error("Error updating patient:", error);
+            toast.error("Erreur lors de la modification du patient");
         } finally {
             setIsSubmitting(false);
         }
@@ -112,7 +122,7 @@ export function AddPatientModal({ isOpen, onClose, onPatientAdded }: AddPatientM
                 >
                     <div className="bg-gray-50 border-b-4 border-black p-4 flex items-center justify-between">
                         <h2 className="font-display font-black text-xl uppercase tracking-wide">
-                            Nouveau Patient
+                            Modifier Patient
                         </h2>
                         <button
                             onClick={onClose}
@@ -136,7 +146,6 @@ export function AddPatientModal({ isOpen, onClose, onPatientAdded }: AddPatientM
                                 required
                                 className="w-full bg-white border-2 border-black h-12 px-4 text-black focus:outline-none focus:ring-4 focus:ring-[#2C2B57]/20 transition-all font-bold"
                                 placeholder="Ex: Ahmed Ben Ali"
-                                autoFocus
                             />
                         </div>
 
@@ -180,8 +189,8 @@ export function AddPatientModal({ isOpen, onClose, onPatientAdded }: AddPatientM
                                 type="button"
                                 onClick={() => setType("walk-in")}
                                 className={`h-12 border-2 border-black font-black uppercase tracking-wide transition-all ${type === "walk-in"
-                                    ? "bg-[#2C2B57] text-white shadow-[4px_4px_0px_0px_#000]"
-                                    : "bg-white text-gray-500 hover:bg-gray-50"
+                                        ? "bg-[#2C2B57] text-white shadow-[4px_4px_0px_0px_#000]"
+                                        : "bg-white text-gray-500 hover:bg-gray-50"
                                     }`}
                             >
                                 Sans RDV
@@ -190,8 +199,8 @@ export function AddPatientModal({ isOpen, onClose, onPatientAdded }: AddPatientM
                                 type="button"
                                 onClick={() => setType("rdv")}
                                 className={`h-12 border-2 border-black font-black uppercase tracking-wide transition-all ${type === "rdv"
-                                    ? "bg-[#2C2B57] text-white shadow-[4px_4px_0px_0px_#000]"
-                                    : "bg-white text-gray-500 hover:bg-gray-50"
+                                        ? "bg-[#2C2B57] text-white shadow-[4px_4px_0px_0px_#000]"
+                                        : "bg-white text-gray-500 hover:bg-gray-50"
                                     }`}
                             >
                                 Rendez-vous
@@ -238,7 +247,7 @@ export function AddPatientModal({ isOpen, onClose, onPatientAdded }: AddPatientM
                             disabled={isSubmitting}
                             className="w-full bg-[#10B981] text-white h-14 font-black text-lg uppercase tracking-wide border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {isSubmitting ? "Ajout..." : "Ajouter à la file"}
+                            {isSubmitting ? "Modifier..." : "Enregistrer"}
                         </button>
                     </form>
                 </motion.div>

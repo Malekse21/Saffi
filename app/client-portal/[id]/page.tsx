@@ -8,6 +8,7 @@ import { useParams } from "next/navigation";
 import ReviewGate from "@/components/ReviewGate";
 import { addPatientByClinicId } from "@/lib/patients";
 import { createClient } from "@/utils/supabase/client";
+import { MOTIFS, MotifValue } from "@/lib/motifs";
 
 export default function ClientPortalPage() {
     const params = useParams();
@@ -25,6 +26,7 @@ export default function ClientPortalPage() {
     const [hasSubmittedInfo, setHasSubmittedInfo] = useState(false);
     const [userName, setUserName] = useState("");
     const [userPhone, setUserPhone] = useState("");
+    const [selectedMotif, setSelectedMotif] = useState<MotifValue>("consultation");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [clinicUserId, setClinicUserId] = useState<string | null>(null);
 
@@ -104,9 +106,25 @@ export default function ClientPortalPage() {
         fetchClinicUserId();
     }, [clinicId]);
 
+    // Current Motif State
+    const [currentMotif, setCurrentMotif] = useState<string | null>(null);
+
     // Restore session on mount
     useEffect(() => {
         const restoreSession = async () => {
+            // Check for terminal states first (Completed/Deleted)
+            const terminalState = sessionStorage.getItem(`saffi_terminal_state_${clinicId}`);
+            if (terminalState === 'deleted') {
+                setIsDeleted(true);
+                setHasSubmittedInfo(true); // To bypass form
+                return;
+            }
+            if (terminalState === 'completed') {
+                setStatus('completed');
+                setHasSubmittedInfo(true); // To bypass form
+                return;
+            }
+
             const savedSession = localStorage.getItem(`saffi_patient_session_${clinicId}`);
             if (!savedSession) return;
 
@@ -134,6 +152,7 @@ export default function ClientPortalPage() {
                 setUserName(patient.name);
                 setUserPhone(patient.phone || "");
                 setIsAway(patient.status === 'away');
+                setCurrentMotif(patient.motif || null); // Restore motif
                 setHasSubmittedInfo(true);
 
                 // Calculate initial position if waiting
@@ -150,28 +169,7 @@ export default function ClientPortalPage() {
         restoreSession();
     }, [clinicId]);
 
-    // Auto-end session 1 minute after completion
-    useEffect(() => {
-        if (status === 'completed') {
-            const timer = setTimeout(() => {
-                // Clear session
-                localStorage.removeItem(`saffi_patient_session_${clinicId}`);
-
-                // Attempt to close the window
-                try {
-                    window.close();
-                } catch (e) {
-                    console.error("Could not close window", e);
-                }
-
-                // Fallback: Redirect to blank page to ensure they leave the queue
-                // This handles cases where window.close() is blocked by the browser
-                window.location.href = "about:blank";
-            }, 60000); // 1 minute
-
-            return () => clearTimeout(timer);
-        }
-    }, [status, clinicId]);
+    // ... (handleSubmitInfo logic remains mostly same, just need to set currentMotif on success)
 
     const handleSubmitInfo = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -208,7 +206,7 @@ export default function ClientPortalPage() {
             console.log('Attempting to add patient with clinic ID:', clinicId);
 
             // Add patient to queue via Supabase
-            const patient = await addPatientByClinicId(clinicId, name, phone);
+            const patient = await addPatientByClinicId(clinicId, name, phone, 'walk-in', undefined, selectedMotif);
 
             console.log('Patient added successfully:', patient);
 
@@ -221,6 +219,7 @@ export default function ClientPortalPage() {
             setPatientId(patient.id);
             setTicketNumber(patient.ticket_number);
             setStatus(patient.status);
+            setCurrentMotif(patient.motif || null); // Set initial motif
             setHasSubmittedInfo(true);
 
             // Calculate initial position
@@ -243,6 +242,8 @@ export default function ClientPortalPage() {
         }
     };
 
+    // ...
+
     // Subscribe to real-time updates for this specific patient
     useEffect(() => {
         if (!patientId || !hasSubmittedInfo) return;
@@ -254,14 +255,25 @@ export default function ClientPortalPage() {
             .on(
                 'postgres_changes',
                 {
-                    event: 'UPDATE',
+                    event: '*', // Listen to all events (UPDATE, DELETE)
                     schema: 'public',
                     table: 'patients',
                     filter: `id=eq.${patientId}`,
                 },
                 async (payload) => {
+                    if (payload.eventType === 'DELETE') {
+                        // Patient was deleted
+                        localStorage.removeItem(`saffi_patient_session_${clinicId}`);
+                        sessionStorage.setItem(`saffi_terminal_state_${clinicId}`, 'deleted');
+                        setIsDeleted(true);
+                        return;
+                    }
+
                     const updatedPatient = payload.new as any;
                     setStatus(updatedPatient.status);
+                    if (updatedPatient.motif) {
+                        setCurrentMotif(updatedPatient.motif); // Update motif in real-time
+                    }
 
                     if (updatedPatient.status === 'active') {
                         playNotificationSound();
@@ -269,7 +281,10 @@ export default function ClientPortalPage() {
                             navigator.vibrate([500, 200, 500, 200, 500]);
                         }
                     } else if (updatedPatient.status === 'completed') {
+                        localStorage.removeItem(`saffi_patient_session_${clinicId}`);
+                        sessionStorage.setItem(`saffi_terminal_state_${clinicId}`, 'completed');
                         setIsReviewGateOpen(true);
+                        playPopSound();
                     }
 
                     // Recalculate position
@@ -290,21 +305,12 @@ export default function ClientPortalPage() {
                     event: '*',
                     schema: 'public',
                     table: 'patients',
+                    filter: `user_id=eq.${clinicUserId}`, // Filter by clinic
                 },
                 async () => {
-                    // Recalculate position when any patient changes
-                    if (patientId && status === 'waiting') {
-                        const supabase = createClient();
-                        const { data: myPatient } = await supabase
-                            .from('patients')
-                            .select('user_id, created_at')
-                            .eq('id', patientId)
-                            .single();
-
-                        if (myPatient) {
-                            const pos = await calculatePosition(myPatient.user_id, myPatient.created_at);
-                            setPosition(pos);
-                        }
+                    // Whenever any patient changes in this clinic, recalculate position
+                    if (status === 'waiting') {
+                        // We rely on the specific patient subscription for position updates for now
                     }
                 }
             )
@@ -314,7 +320,51 @@ export default function ClientPortalPage() {
             supabase.removeChannel(channel);
             supabase.removeChannel(allPatientsChannel);
         };
-    }, [patientId, hasSubmittedInfo, status]);
+    }, [patientId, hasSubmittedInfo, clinicUserId, status]);
+
+    // Auto-end session 1 minute after completion
+    useEffect(() => {
+        if (status === 'completed') {
+            const timer = setTimeout(() => {
+                // Clear session
+                localStorage.removeItem(`saffi_patient_session_${clinicId}`);
+
+                // Fallback: Redirect to blank page
+                window.location.href = "about:blank";
+            }, 60000); // 1 minute
+
+            return () => clearTimeout(timer);
+        }
+    }, [status, clinicId]);
+
+    // Handle Deletion State
+    const [isDeleted, setIsDeleted] = useState(false);
+
+    const playPopSound = () => {
+        try {
+            const ctx = audioContextRef.current;
+            if (!ctx) return;
+
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(800, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.1);
+
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+
+            osc.start();
+            osc.stop(ctx.currentTime + 0.1);
+        } catch (e) {
+            console.error("Audio play failed", e);
+        }
+    };
+
 
 
 
@@ -331,7 +381,6 @@ export default function ClientPortalPage() {
 
         setIsAway(!isAway);
         setStatus(newStatus);
-        alert(isAway ? "Statut mis à jour : Vous êtes de retour." : "Statut mis à jour : Vous êtes sorti.");
     };
 
     const isServing = status === 'active';
@@ -399,6 +448,9 @@ export default function ClientPortalPage() {
         fetchClinicDetails();
     }, [clinicUserId]);
 
+    // Away Confirmation State
+    const [showAwayConfirmation, setShowAwayConfirmation] = useState(false);
+
     // Show info form if not submitted
     if (!hasSubmittedInfo) {
         return (
@@ -455,6 +507,25 @@ export default function ClientPortalPage() {
                             />
                         </div>
 
+                        <div className="space-y-2">
+                            <label className="text-xs font-black text-gray-600 flex items-center gap-2 uppercase tracking-wider">
+                                <HelpCircle className="h-4 w-4" /> Motif de visite *
+                            </label>
+                            <select
+                                value={selectedMotif}
+                                onChange={(e) => setSelectedMotif(e.target.value as MotifValue)}
+                                className="w-full bg-white border-2 border-black h-12 px-4 text-black focus:outline-none focus:ring-4 focus:ring-yellow-400 transition-all text-lg font-medium appearance-none"
+                                required
+                                disabled={isSubmitting}
+                            >
+                                {MOTIFS.filter(m => m.isPublic).map((motif) => (
+                                    <option key={motif.value} value={motif.value}>
+                                        {motif.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
                         <button
                             type="submit"
                             disabled={isSubmitting}
@@ -470,40 +541,104 @@ export default function ClientPortalPage() {
                         </p>
                     </div>
                 </motion.div>
+            </div >
+        );
+    }
+
+    // Show deleted screen
+    if (isDeleted) {
+        return (
+            <div className="h-screen bg-gray-50 text-black font-sans flex flex-col overflow-hidden relative">
+                {/* Header */}
+                <header className="bg-white border-b-4 border-black px-6 py-4 flex items-center justify-between shrink-0 z-10">
+                    <div className="flex flex-col">
+                        <span className="font-display font-black text-3xl tracking-tighter uppercase leading-none">Saffi.</span>
+                        {clinicName && (
+                            <span className="text-sm font-bold text-gray-600 uppercase tracking-wide truncate max-w-[200px] mt-1">
+                                {clinicName}
+                            </span>
+                        )}
+                    </div>
+                </header>
+
+                <main className="flex-1 flex flex-col items-center justify-center px-4 py-4 space-y-4 max-w-md mx-auto w-full min-h-0">
+                    <motion.div
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="bg-white border-4 border-black p-8 w-full shadow-[8px_8px_0px_0px_#000] text-center space-y-6"
+                    >
+                        <div className="flex justify-center">
+                            <div className="bg-red-500 text-white p-4 rounded-full border-4 border-black shadow-[4px_4px_0px_0px_#000]">
+                                <User className="h-12 w-12" />
+                            </div>
+                        </div>
+                        <div>
+                            <h1 className="font-display font-black text-2xl uppercase tracking-tight mb-2">
+                                Session Terminée
+                            </h1>
+                            <p className="text-gray-600 font-bold">
+                                Votre session a été fermée par le cabinet.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="w-full py-3 bg-black text-white border-2 border-black font-bold uppercase shadow-[4px_4px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"
+                        >
+                            Retour à l'accueil
+                        </button>
+                    </motion.div>
+                </main>
             </div>
         );
     }
 
-    // Show completed screen
+    // Show completed screen (App-like)
     if (status === 'completed') {
         return (
-            <div className="min-h-screen bg-gray-50 text-black font-sans flex items-center justify-center px-6">
-                <motion.div
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    className="bg-white border-4 border-black p-12 w-full max-w-md shadow-[8px_8px_0px_0px_#000] text-center space-y-8"
-                >
-                    <div className="flex justify-center">
-                        <div className="bg-[#10B981] text-white p-4 rounded-full border-4 border-black shadow-[4px_4px_0px_0px_#000]">
-                            <CheckCircle className="h-12 w-12" />
+            <div className="h-screen bg-gray-50 text-black font-sans flex flex-col overflow-hidden relative">
+                {/* Header */}
+                <header className="bg-white border-b-4 border-black px-6 py-4 flex items-center justify-between shrink-0 z-10">
+                    <div className="flex flex-col">
+                        <span className="font-display font-black text-3xl tracking-tighter uppercase leading-none">Saffi.</span>
+                        {clinicName && (
+                            <span className="text-sm font-bold text-gray-600 uppercase tracking-wide truncate max-w-[200px] mt-1">
+                                {clinicName}
+                            </span>
+                        )}
+                    </div>
+                    <button className="text-gray-600 hover:text-black transition-colors">
+                        <HelpCircle className="h-6 w-6" />
+                    </button>
+                </header>
+
+                <main className="flex-1 flex flex-col items-center justify-center px-4 py-4 space-y-4 max-w-md mx-auto w-full min-h-0">
+                    <motion.div
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="bg-white border-4 border-black p-12 w-full shadow-[8px_8px_0px_0px_#000] text-center space-y-8"
+                    >
+                        <div className="flex justify-center">
+                            <div className="bg-[#10B981] text-white p-4 rounded-full border-4 border-black shadow-[4px_4px_0px_0px_#000]">
+                                <CheckCircle className="h-12 w-12" />
+                            </div>
                         </div>
-                    </div>
 
-                    <div>
-                        <h1 className="font-display font-black text-4xl uppercase tracking-tight mb-4">
-                            Visite Terminée
-                        </h1>
-                        <p className="text-gray-600 font-bold text-lg">
-                            Merci de votre visite !
-                        </p>
-                    </div>
+                        <div>
+                            <h1 className="font-display font-black text-4xl uppercase tracking-tight mb-4">
+                                Visite Terminée
+                            </h1>
+                            <p className="text-gray-600 font-bold text-lg">
+                                Merci de votre visite !
+                            </p>
+                        </div>
 
-                    <div className="pt-8 border-t-2 border-gray-100">
-                        <p className="text-sm font-bold text-gray-400 uppercase tracking-wide">
-                            À bientôt chez Saffi
-                        </p>
-                    </div>
-                </motion.div>
+                        <div className="pt-8 border-t-2 border-gray-100">
+                            <p className="text-sm font-bold text-gray-400 uppercase tracking-wide">
+                                À bientôt chez Saffi
+                            </p>
+                        </div>
+                    </motion.div>
+                </main>
 
                 {/* Review Gate Overlay */}
                 {isReviewGateOpen && (
@@ -518,59 +653,75 @@ export default function ClientPortalPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 text-black font-sans pb-8">
-            {/* Simple Header */}
-            <header className="bg-white border-b-4 border-black px-6 py-6 flex items-center justify-between">
-                <span className="font-display font-black text-3xl tracking-tighter uppercase">Saffi.</span>
+        <div className="h-screen bg-gray-50 text-black font-sans flex flex-col overflow-hidden relative">
+            {/* Header */}
+            <header className="bg-white border-b-4 border-black px-6 py-4 flex items-center justify-between shrink-0 z-10">
+                <div className="flex flex-col">
+                    <span className="font-display font-black text-3xl tracking-tighter uppercase leading-none">Saffi.</span>
+                    {clinicName && (
+                        <span className="text-sm font-bold text-gray-600 uppercase tracking-wide truncate max-w-[200px] mt-1">
+                            {clinicName}
+                        </span>
+                    )}
+                </div>
                 <button className="text-gray-600 hover:text-black transition-colors">
                     <HelpCircle className="h-6 w-6" />
                 </button>
             </header>
 
-            <main className="px-6 pt-8 space-y-8 max-w-2xl mx-auto">
+            <main className="flex-1 flex flex-col px-4 py-4 space-y-4 max-w-md mx-auto w-full min-h-0">
                 {/* Status Message */}
-                <div className="text-center">
-                    <h1 className="font-black text-2xl uppercase tracking-tight mb-1">
+                <div className="text-center shrink-0">
+                    <h1 className="font-black text-xl uppercase tracking-tight mb-1">
                         {isServing ? "C'est votre tour!" : position === 1 ? "Vous êtes le prochain !" : "Vous êtes en ligne!"}
                     </h1>
                     {position === 1 && !isServing && (
-                        <p className="text-[#2C2B57] font-bold uppercase tracking-wide animate-pulse">
+                        <p className="text-[#2C2B57] font-bold text-sm uppercase tracking-wide animate-pulse">
                             Préparez-vous à entrer
                         </p>
                     )}
                 </div>
 
-                {/* Circular Progress Card */}
+                {/* Circular Progress Card - Flexible height */}
                 <motion.div
                     layout
                     className={cn(
-                        "relative bg-white border-4 border-black shadow-[8px_8px_0px_0px_#000] p-12 transition-colors duration-500",
+                        "flex-1 min-h-0 relative bg-white border-4 border-black shadow-[4px_4px_0px_0px_#000] p-4 flex flex-col items-center justify-center transition-colors duration-500",
                         isServing && "bg-[#10B981]"
                     )}
                 >
-
-
-                    <div className="flex flex-col items-center justify-center space-y-8">
+                    <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
                         {/* Ticket Number Badge */}
                         {ticketNumber && !isServing && (
-                            <div className="bg-white border-2 border-black px-6 py-3">
-                                <p className="text-xs font-black uppercase tracking-wider text-gray-500">Votre Numéro</p>
-                                <p className="font-display font-black text-3xl text-center">{ticketNumber}</p>
+                            <div className="flex flex-col items-center gap-2 shrink-0">
+                                <div className="bg-white border-2 border-black px-4 py-2">
+                                    <p className="text-[10px] font-black uppercase tracking-wider text-gray-500">Votre Numéro</p>
+                                    <p className="font-display font-black text-2xl text-center leading-none">{ticketNumber}</p>
+                                </div>
+                                {currentMotif && (
+                                    <div className={cn(
+                                        "px-3 py-1 border-2 border-black rounded-full text-xs font-bold uppercase tracking-wide",
+                                        MOTIFS.find(m => m.value === currentMotif)?.color || "bg-gray-100",
+                                        currentMotif === 'urgence' ? "text-white animate-pulse" : "text-black"
+                                    )}>
+                                        {MOTIFS.find(m => m.value === currentMotif)?.label || currentMotif}
+                                    </div>
+                                )}
                             </div>
                         )}
 
                         {/* Circular Progress Indicator */}
                         {isServing ? (
-                            <div className="flex flex-col items-center">
-                                <div className="w-80 h-80 rounded-full bg-white border-4 border-black flex flex-col items-center justify-center">
-                                    <span className="font-display font-black text-9xl text-black">
+                            <div className="flex flex-col items-center justify-center flex-1">
+                                <div className="w-[min(30vh,160px)] h-[min(30vh,160px)] rounded-full bg-white border-4 border-black flex flex-col items-center justify-center shadow-[4px_4px_0px_0px_#000]">
+                                    <span className="font-display font-black text-6xl text-black">
                                         {ticketNumber}
                                     </span>
                                 </div>
-                                <p className="mt-6 font-black text-xl uppercase tracking-wide">Entrez maintenant!</p>
+                                <p className="mt-4 font-black text-lg uppercase tracking-wide text-white drop-shadow-md">Entrez maintenant!</p>
                             </div>
                         ) : (
-                            <div className="relative w-80 h-80">
+                            <div className="relative w-[min(30vh,200px)] h-[min(30vh,200px)] shrink-0">
                                 {/* SVG Circle Progress */}
                                 <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
                                     {/* Background circle */}
@@ -600,17 +751,17 @@ export default function ClientPortalPage() {
                                 {/* Center Content */}
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                                     <div className="text-center">
-                                        <p className="font-black text-7xl text-[#2C2B57]">
-                                            {remainingMinutes}<span className="text-4xl">min</span>
+                                        <p className="font-black text-5xl text-[#2C2B57]">
+                                            {remainingMinutes}<span className="text-2xl">min</span>
                                         </p>
-                                        <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mt-2">
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">
                                             temps estimé
                                         </p>
-                                        <div className="mt-4 pt-4 border-t-2 border-gray-200">
-                                            <p className="font-black text-5xl text-black">
+                                        <div className="mt-2 pt-2 border-t-2 border-gray-200 w-16 mx-auto">
+                                            <p className="font-black text-3xl text-black leading-none">
                                                 {position || '...'}
                                             </p>
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-1">
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                                                 en attente
                                             </p>
                                         </div>
@@ -618,44 +769,82 @@ export default function ClientPortalPage() {
                                 </div>
                             </div>
                         )}
-
-
                     </div>
                 </motion.div>
 
-                {/* Je Sors Control */}
-                {!isServing && (
-                    <button
-                        onClick={toggleAway}
-                        className={cn(
-                            "w-full py-4 font-black text-lg flex items-center justify-center gap-3 transition-all border-4 border-black uppercase tracking-wide",
-                            isAway
-                                ? "bg-[#10B981] text-white shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000]"
-                                : "bg-[#2C2B57] text-white shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000]"
-                        )}
-                    >
-                        {isAway ? (
-                            <>
-                                <MapPin className="h-5 w-5" /> Je suis revenu
-                            </>
-                        ) : (
-                            <>
-                                <Clock className="h-5 w-5" /> Je sors un moment
-                            </>
-                        )}
-                    </button>
-                )}
+                {/* Bottom Actions - Shrinkable */}
+                <div className="shrink-0 space-y-3">
+                    {/* Je Sors Control */}
+                    {!isServing && (
+                        <button
+                            onClick={() => setShowAwayConfirmation(true)}
+                            className={cn(
+                                "w-full py-3 font-black text-base flex items-center justify-center gap-2 transition-all border-4 border-black uppercase tracking-wide",
+                                isAway
+                                    ? "bg-[#10B981] text-white shadow-[4px_4px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0px_0px_#000]"
+                                    : "bg-[#2C2B57] text-white shadow-[4px_4px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0px_0px_#000]"
+                            )}
+                        >
+                            {isAway ? (
+                                <>
+                                    <MapPin className="h-4 w-4" /> Je suis revenu
+                                </>
+                            ) : (
+                                <>
+                                    <Clock className="h-4 w-4" /> Je sors un moment
+                                </>
+                            )}
+                        </button>
+                    )}
 
-                {/* Ad Card */}
-                <div className="bg-white p-8 border-4 border-dashed border-gray-300 shadow-[4px_4px_0px_0px_#000] text-center space-y-4">
-                    <h3 className="font-display font-black text-3xl leading-tight text-gray-400 uppercase">
-                        Publicité
-                    </h3>
-                    <p className="text-gray-400 text-sm font-bold uppercase tracking-wide">
-                        Espace publicitaire disponible
-                    </p>
+                    {/* Ad Card - Bigger */}
+                    <div className="bg-white p-6 border-4 border-dashed border-gray-300 shadow-[2px_2px_0px_0px_#000] text-center flex flex-col items-center justify-center min-h-[120px]">
+                        <h3 className="font-display font-black text-2xl leading-tight text-gray-400 uppercase mb-2">
+                            Publicité
+                        </h3>
+                        <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">
+                            Espace publicitaire disponible
+                        </p>
+                    </div>
                 </div>
             </main>
+
+            {/* Away Confirmation Modal */}
+            {showAwayConfirmation && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <motion.div
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="bg-white w-full max-w-sm border-4 border-black shadow-[8px_8px_0px_0px_#000] p-6 text-center"
+                    >
+                        <h3 className="font-display font-black text-xl uppercase mb-4">
+                            {isAway ? "Êtes-vous de retour ?" : "Voulez-vous sortir ?"}
+                        </h3>
+                        <p className="text-gray-600 font-bold mb-6">
+                            {isAway
+                                ? "Confirmez que vous êtes revenu dans la salle d'attente."
+                                : "Votre place sera conservée, mais nous saurons que vous êtes absent momentanément."}
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowAwayConfirmation(false)}
+                                className="flex-1 py-3 border-2 border-black font-bold uppercase hover:bg-gray-50"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={() => {
+                                    toggleAway();
+                                    setShowAwayConfirmation(false);
+                                }}
+                                className="flex-1 py-3 bg-black text-white border-2 border-black font-bold uppercase shadow-[4px_4px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"
+                            >
+                                Confirmer
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
 
             {/* Review Gate */}
             {isReviewGateOpen && (

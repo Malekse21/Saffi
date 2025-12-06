@@ -71,37 +71,37 @@ export default function ReviewGate({ googleReviewLink, onClose, clinicUserId }: 
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
                 transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="fixed bottom-0 left-0 right-0 z-50 p-4 md:p-6 flex justify-center items-end pointer-events-none"
+                className="fixed bottom-0 left-0 right-0 z-50 p-4 flex justify-center items-end pointer-events-none"
             >
-                <div className="bg-white w-full max-w-md border-4 border-black shadow-[8px_8px_0px_0px_#000] p-8 pointer-events-auto relative">
+                <div className="bg-white w-full max-w-sm border-4 border-black shadow-[8px_8px_0px_0px_#000] p-6 pointer-events-auto relative">
                     {/* Close Button (Optional) */}
                     {onClose && (
                         <button
                             onClick={onClose}
-                            className="absolute top-4 right-4 text-gray-400 hover:text-black font-black text-xl transition-colors"
+                            className="absolute top-2 right-2 text-gray-400 hover:text-black font-black text-lg transition-colors"
                         >
                             ✕
                         </button>
                     )}
 
                     {step === "rating" && (
-                        <div className="text-center space-y-6">
-                            <h3 className="font-display font-black text-3xl uppercase leading-tight tracking-tight">
+                        <div className="text-center space-y-4">
+                            <h3 className="font-display font-black text-xl uppercase leading-tight tracking-tight">
                                 Comment s'est passée votre visite ?
                             </h3>
 
-                            <div className="flex justify-center gap-3">
+                            <div className="flex justify-center gap-2">
                                 {[1, 2, 3, 4, 5].map((star) => (
                                     <button
                                         key={star}
                                         onMouseEnter={() => setHoveredRating(star)}
                                         onMouseLeave={() => setHoveredRating(0)}
                                         onClick={() => handleRate(star)}
-                                        className="transition-transform hover:scale-110 active:scale-95 border-2 border-black p-2 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000]"
+                                        className="transition-transform hover:scale-110 active:scale-95 border-2 border-black p-1.5 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_0px_#000]"
                                     >
                                         <Star
                                             className={cn(
-                                                "h-12 w-12 stroke-[2.5]",
+                                                "h-8 w-8 stroke-[2.5]",
                                                 (hoveredRating || rating) >= star
                                                     ? "fill-[#2C2B57] text-[#2C2B57]"
                                                     : "fill-transparent text-gray-300"
@@ -110,7 +110,7 @@ export default function ReviewGate({ googleReviewLink, onClose, clinicUserId }: 
                                     </button>
                                 ))}
                             </div>
-                            <p className="text-gray-500 font-bold text-sm uppercase tracking-wider">
+                            <p className="text-gray-500 font-bold text-xs uppercase tracking-wider">
                                 Touchez une étoile pour noter
                             </p>
                         </div>
