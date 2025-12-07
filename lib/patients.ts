@@ -5,7 +5,7 @@ export interface Patient {
     user_id: string;
     ticket_number: string;
     name: string;
-    status: 'waiting' | 'active' | 'completed' | 'away';
+    status: 'waiting' | 'active' | 'completed' | 'away' | 'scheduled';
     type: 'walk-in' | 'rdv';
     arrival_time: string;
     rdv_time?: string;

@@ -32,6 +32,7 @@ export default function ClientPortalPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [clinicUserId, setClinicUserId] = useState<string | null>(null);
 
+
     // Audio Context Ref
     const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -94,14 +95,25 @@ export default function ClientPortalPage() {
     useEffect(() => {
         const fetchClinicUserId = async () => {
             const supabase = createClient();
-            const { data } = await supabase
-                .from('queue_settings')
-                .select('user_id')
-                .eq('clinic_id', clinicId)
-                .single();
+            // Try slug first
+            let { data } = await supabase
+                .from('profiles')
+                .select('id') // user_id is the id in profiles
+                .eq('slug', clinicId)
+                .maybeSingle();
+
+            if (!data) {
+                // Fallback to clinic_id
+                const { data: uuidData } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('clinic_id', clinicId)
+                    .maybeSingle();
+                data = uuidData;
+            }
 
             if (data) {
-                setClinicUserId(data.user_id);
+                setClinicUserId(data.id);
             }
         };
 
@@ -115,15 +127,13 @@ export default function ClientPortalPage() {
     useEffect(() => {
         const restoreSession = async () => {
             // Check for terminal states first (Completed/Deleted)
+            // We skip terminal state check for 'completed' to allow fresh scans
+            // If user refreshes immediately after completion, they might see form again, but that's better than being stuck.
+            
             const terminalState = sessionStorage.getItem(`saffi_terminal_state_${clinicId}`);
             if (terminalState === 'deleted') {
                 setIsDeleted(true);
-                setHasSubmittedInfo(true); // To bypass form
-                return;
-            }
-            if (terminalState === 'completed') {
-                setStatus('completed');
-                setHasSubmittedInfo(true); // To bypass form
+                setHasSubmittedInfo(true); 
                 return;
             }
 
@@ -145,6 +155,13 @@ export default function ClientPortalPage() {
                     // Invalid session or patient deleted
                     localStorage.removeItem(`saffi_patient_session_${clinicId}`);
                     return;
+                }
+
+                // NEW: If patient is completed, DO NOT restore. Clear session and let user start new.
+                if (patient.status === 'completed') {
+                     localStorage.removeItem(`saffi_patient_session_${clinicId}`);
+                     sessionStorage.removeItem(`saffi_terminal_state_${clinicId}`);
+                     return;
                 }
 
                 // Restore state
@@ -173,44 +190,29 @@ export default function ClientPortalPage() {
 
     // ... (handleSubmitInfo logic remains mostly same, just need to set currentMotif on success)
 
-    const handleSubmitInfo = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        const name = userName.trim();
-        const phone = userPhone.trim();
-
-        if (!name) {
-            alert("Veuillez entrer votre nom");
-            return;
-        }
-
-        if (name.length > 30) {
-            alert("Le nom ne doit pas dépasser 30 caractères");
-            return;
-        }
-
-        if (!phone) {
-            alert("Veuillez entrer votre numéro de téléphone");
-            return;
-        }
-
-        if (phone.length !== 8) {
-            alert("Le numéro de téléphone doit contenir exactement 8 caractères");
-            return;
-        }
-
-        if (isSubmitting) return;
-
+    const performJoin = async () => {
         setIsSubmitting(true);
         initAudio();
 
         try {
-            console.log('Attempting to add patient with clinic ID:', clinicId);
+            console.log('Attempting to join queue via API:', clinicId);
 
-            // Add patient to queue via Supabase
-            const patient = await addPatientByClinicId(clinicId, name, phone, 'walk-in', undefined, selectedMotif);
+            // Call the Join API
+            const res = await fetch('/api/queue/join', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phone: userPhone,
+                    name: userName,
+                    doctorId: clinicUserId
+                })
+            });
 
-            console.log('Patient added successfully:', patient);
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'Failed to join');
+
+            const patient = data.patient;
+            console.log('Patient joined successfully:', patient);
 
             // Save session
             localStorage.setItem(`saffi_patient_session_${clinicId}`, JSON.stringify({
@@ -221,27 +223,34 @@ export default function ClientPortalPage() {
             setPatientId(patient.id);
             setTicketNumber(patient.ticket_number);
             setStatus(patient.status);
-            setCurrentMotif(patient.motif || null); // Set initial motif
+            setCurrentMotif(patient.motif || null);
             setHasSubmittedInfo(true);
 
-            // Calculate initial position
+            // Calculate position
             const pos = await calculatePosition(patient.user_id, patient.created_at);
             setPosition(pos);
+
         } catch (error: any) {
-            console.error("Detailed error joining queue:", error);
-
-            // Show more specific error message
-            let errorMessage = "Erreur lors de l'ajout à la file d'attente.";
-
-            if (error.message === 'Clinic not found') {
-                errorMessage = "Ce cabinet n'existe pas. Veuillez vérifier le QR code.";
-            } else if (error.message) {
-                errorMessage = `Erreur: ${error.message}`;
-            }
-
-            alert(errorMessage + "\n\nDétails dans la console du navigateur.");
+            console.error("Join error:", error);
+            alert("Erreur lors de l'ajout à la file d'attente: " + error.message);
             setIsSubmitting(false);
         }
+    };
+
+    const handleSubmitInfo = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        const name = userName.trim();
+        const phone = userPhone.trim();
+
+        if (!name || isSubmitting) return;
+        if (!phone || phone.length !== 8) {
+            alert("Numéro de téléphone invalide (8 chiffres)");
+            return;
+        }
+
+        // Direct Join (API handles matching internally)
+        await performJoin();
     };
 
     // ...
@@ -640,6 +649,16 @@ export default function ClientPortalPage() {
                             <p className="text-sm font-bold text-gray-400 uppercase tracking-wide">
                                 À bientôt chez Saffi
                             </p>
+                            <button
+                                onClick={() => {
+                                    localStorage.removeItem(`saffi_patient_session_${clinicId}`);
+                                    sessionStorage.removeItem(`saffi_terminal_state_${clinicId}`);
+                                    window.location.reload();
+                                }}
+                                className="mt-6 w-full py-3 bg-black text-white border-2 border-black font-bold uppercase shadow-[4px_4px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"
+                            >
+                                Nouvelle Visite
+                            </button>
                         </div>
                     </motion.div>
                 </main>
@@ -667,13 +686,12 @@ export default function ClientPortalPage() {
                     <h1 className="font-black text-xl uppercase tracking-tight mb-1">
                         {isServing ? "C'est votre tour!" : position === 1 ? "Vous êtes le prochain !" : "Vous êtes en ligne!"}
                     </h1>
-                    {position === 1 && !isServing && (
+                     {position === 1 && !isServing && (
                         <p className="text-[#2C2B57] font-bold text-sm uppercase tracking-wide animate-pulse">
                             Préparez-vous à entrer
                         </p>
                     )}
                 </div>
-
                 {/* Flippable Queue Card */}
                 <div className="flex-1 min-h-0 relative">
                      <FlipQueueCard 
@@ -767,6 +785,8 @@ export default function ClientPortalPage() {
                     onClose={() => setIsReviewGateOpen(false)}
                 />
             )}
+
+
         </div>
     );
 }

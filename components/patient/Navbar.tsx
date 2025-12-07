@@ -31,7 +31,6 @@ export default function Navbar({ clinicName, wifiCode }: NavbarProps) {
 
     return (
         <header className="flex items-center justify-between p-4 bg-white border-b-2 border-black sticky top-0 z-50">
-            <div className="flex flex-col">
                 <Image
                     src="/media/black_logo.png"
                     alt="Saffi Logo"
@@ -39,12 +38,7 @@ export default function Navbar({ clinicName, wifiCode }: NavbarProps) {
                     height={40}
                     className="h-10 w-auto"
                 />
-                {clinicName && (
-                    <span className="text-sm font-bold text-gray-600 uppercase tracking-wide truncate max-w-[200px] mt-1">
-                        {clinicName}
-                    </span>
-                )}
-            </div>
+
             <div className="flex items-center gap-2">
                 {wifiCode && (
                     <button

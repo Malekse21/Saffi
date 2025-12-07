@@ -18,7 +18,7 @@ type DBPatient = {
     user_id: string;
     ticket_number: string;
     name: string;
-    status: 'waiting' | 'active' | 'completed' | 'away';
+    status: 'waiting' | 'active' | 'completed' | 'away' | 'scheduled';
     type: 'walk-in' | 'rdv';
     arrival_time: string;
     rdv_time?: string;
@@ -93,12 +93,13 @@ export default function AccueilPage() {
     };
 
     // Map database status to component status
-    const mapStatus = (dbStatus: string): 'waiting' | 'active' | 'away' | 'completed' => {
+    const mapStatus = (dbStatus: string): 'waiting' | 'active' | 'away' | 'completed' | 'scheduled' => {
         switch (dbStatus) {
             case 'active': return 'active';
             case 'waiting': return 'waiting';
             case 'away': return 'away';
             case 'completed': return 'completed';
+            case 'scheduled': return 'scheduled';
             default: return 'waiting';
         }
     };
@@ -124,7 +125,19 @@ export default function AccueilPage() {
     });
 
     const activePatient = patients.find(p => p.status === 'active');
-    const queuePatients = patients.filter(p => p.status === 'waiting' || p.status === 'away');
+    const queuePatients = patients
+        .filter(p => p.status === 'waiting' || p.status === 'away' || p.status === 'scheduled')
+        .sort((a, b) => {
+            // Priority first
+            if (a.is_priority !== b.is_priority) return (a.is_priority ? -1 : 1);
+            
+            // Then by time (Effective Time: RDV Time for appointments, Arrival/Creation for walk-ins)
+            const timeA = new Date(a.rdv_time || a.created_at).getTime();
+            const timeB = new Date(b.rdv_time || b.created_at).getTime();
+            
+            return timeA - timeB;
+        });
+
     const completedCount = patients.filter(p => p.status === 'completed').length;
 
     const transformedQueuePatients = queuePatients.map((p, index) => transformPatient(p, index + 1));

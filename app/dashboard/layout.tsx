@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, QrCode, Settings, LogOut, User, Monitor, Plus, ChevronLeft, ChevronRight, UserCircle, TrendingUp } from "lucide-react";
+import { LayoutDashboard, QrCode, Settings, LogOut, User, Monitor, Plus, ChevronLeft, ChevronRight, UserCircle, TrendingUp, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/client";
 import Image from "next/image";
@@ -24,6 +24,13 @@ export default function DashboardLayout({
     useEffect(() => {
         setTime(new Date());
         const timer = setInterval(() => setTime(new Date()), 1000);
+
+        // Auto-sync appointments to queue on mount
+        fetch('/api/cron/sync-queue')
+            .then(res => res.json())
+            .then(data => console.log('Queue Sync:', data))
+            .catch(err => console.error('Queue Sync Error:', err));
+
         return () => clearInterval(timer);
     }, []);
 
@@ -96,6 +103,12 @@ export default function DashboardLayout({
             href: "/dashboard/analytics",
             icon: TrendingUp,
             active: pathname === "/dashboard/analytics",
+        },
+        {
+            name: "Calendrier",
+            href: "/dashboard/calendar",
+            icon: Calendar,
+            active: pathname === "/dashboard/calendar",
         },
         {
             name: "Borne QR",

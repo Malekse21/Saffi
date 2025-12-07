@@ -11,7 +11,7 @@ interface PatientCardProps {
     onEdit?: (patient: Patient) => void;
     onMarkUrgency?: (patient: Patient) => void;
     onDelete?: (patient: Patient) => void;
-    onStatusChange?: (patient: Patient, newStatus: 'waiting' | 'away') => void;
+    onStatusChange?: (patient: Patient, newStatus: 'waiting' | 'away' | 'scheduled') => void;
 }
 
 export function PatientCard({
@@ -24,6 +24,7 @@ export function PatientCard({
     onStatusChange
 }: PatientCardProps) {
     const isAway = patient.status === 'away';
+    const isScheduled = patient.status === 'scheduled';
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     // Find motif details
@@ -34,6 +35,7 @@ export function PatientCard({
             className={cn(
                 "relative border-2 border-black p-4 flex items-center justify-between bg-white shadow-[4px_4px_0px_0px_#000] transition-all",
                 isAway && "bg-gray-200 grayscale-[0.5]",
+                isScheduled && "bg-gray-200 grayscale-[0.5] border-dashed",
                 isMenuOpen ? "z-50" : "z-0"
             )}
         >
@@ -72,15 +74,17 @@ export function PatientCard({
                             </span>
                         )}
 
-                        {/* Priority Indicator (Small dot if priority but not urgency motif) */}
-                        {patient.is_priority && motif?.value !== 'urgence' && (
-                            <span className="h-2 w-2 rounded-full bg-red-500 border border-black" title="Prioritaire" />
-                        )}
+
                     </div>
 
                     <h3 className="font-bold text-lg leading-tight">{patient.name}</h3>
                     {patient.phone && (
                         <p className="text-gray-600 text-xs">{patient.phone}</p>
+                    )}
+                    {isScheduled && (
+                         <div className="mt-1 inline-flex items-center gap-1 bg-gray-100 px-2 py-0.5 rounded border border-black text-[10px] font-bold uppercase text-gray-500">
+                             📅 Pas encore arrivé
+                         </div>
                     )}
                 </div>
             </div>
@@ -122,13 +126,16 @@ export function PatientCard({
                                 </button>
                                 <button
                                     onClick={() => {
-                                        onStatusChange?.(patient, isAway ? 'waiting' : 'away');
+                                        const newStatus = isAway ? 'waiting' : (isScheduled ? 'waiting' : 'away');
+                                        onStatusChange?.(patient, newStatus);
                                         setIsMenuOpen(false);
                                     }}
                                     className="w-full px-4 py-2 text-left text-sm font-bold hover:bg-gray-50 flex items-center gap-2"
                                 >
                                     {isAway ? (
                                         <><UserCheck className="h-4 w-4" /> Marquer Présent</>
+                                    ) : isScheduled ? (
+                                        <><UserCheck className="h-4 w-4" /> Marquer Arrivé</>
                                     ) : (
                                         <><UserX className="h-4 w-4" /> Marquer Absent</>
                                     )}
