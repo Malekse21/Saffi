@@ -8,15 +8,17 @@ import { motion } from "framer-motion";
 import AuthVisual from "@/components/AuthVisual";
 import { Mail, Lock, User, Building, Loader2, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import { PasswordStrengthIndicator } from "@/components/PasswordStrengthIndicator";
 
 export default function RegisterPage() {
-    const { register, handleSubmit, formState: { errors } } = useForm();
+    const { register, handleSubmit, formState: { errors }, watch } = useForm();
     const [isLoading, setIsLoading] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
     const [registrationSuccess, setRegistrationSuccess] = useState(false);
     const [userEmail, setUserEmail] = useState("");
     const router = useRouter();
     const supabase = createClient();
+    const password = watch("password");
 
     const onSubmit = async (data: any) => {
         setIsLoading(true);
@@ -109,13 +111,14 @@ export default function RegisterPage() {
                                     <label className="text-xs font-bold uppercase tracking-wider text-black">Mot de passe</label>
                                     <div className="relative">
                                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                        <input
+                                    <input
                                             {...register("password", { required: true })}
                                             type="password"
                                             className="w-full h-10 pl-10 pr-3 bg-white border-2 border-black rounded-md text-sm placeholder:text-gray-400 focus:outline-none focus:bg-yellow-50 transition-colors"
                                             placeholder="••••••••"
                                         />
                                     </div>
+                                    <PasswordStrengthIndicator password={password} />
                                     {errors.password && <span className="text-red-500 text-xs font-bold">Le mot de passe est requis</span>}
                                 </div>
 

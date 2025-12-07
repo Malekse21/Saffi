@@ -16,6 +16,7 @@ export interface Patient {
     motif?: string;
     is_priority?: boolean;
     appointmentTime?: string;
+    recall_sent?: boolean;
 }
 
 export interface QueueSettings {

@@ -32,6 +32,15 @@ const ordinary = localFont({
 export const metadata: Metadata = {
   title: "Saffi - L'attente. Réinventée.",
   description: "Transformez votre salle d'attente avec Saffi.",
+  appleWebApp: {
+    capable: true,
+    title: "Saffi",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: "/icon.png", // Browser tab favicon
+    apple: "/icon.png", // Apple touch icon for PWA
+  }
 };
 
 export default function RootLayout({

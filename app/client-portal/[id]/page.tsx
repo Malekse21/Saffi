@@ -9,6 +9,8 @@ import ReviewGate from "@/components/ReviewGate";
 import { addPatientByClinicId } from "@/lib/patients";
 import { createClient } from "@/utils/supabase/client";
 import { MOTIFS, MotifValue } from "@/lib/motifs";
+import FlipQueueCard from "@/components/FlipQueueCard";
+import Navbar from "@/components/patient/Navbar";
 
 export default function ClientPortalPage() {
     const params = useParams();
@@ -427,6 +429,7 @@ export default function ClientPortalPage() {
     // Fetch clinic details
     const [clinicName, setClinicName] = useState("");
     const [specialty, setSpecialty] = useState("");
+    const [wifiCode, setWifiCode] = useState("");
 
     useEffect(() => {
         const fetchClinicDetails = async () => {
@@ -435,13 +438,14 @@ export default function ClientPortalPage() {
             const supabase = createClient();
             const { data } = await supabase
                 .from('profiles')
-                .select('clinic_name, specialty')
+                .select('clinic_name, specialty, wifi_code')
                 .eq('id', clinicUserId)
                 .single();
 
             if (data) {
                 setClinicName(data.clinic_name || "Cabinet Médical");
                 setSpecialty(data.specialty || "");
+                setWifiCode(data.wifi_code || "");
             }
         };
 
@@ -654,20 +658,8 @@ export default function ClientPortalPage() {
 
     return (
         <div className="h-screen bg-gray-50 text-black font-sans flex flex-col overflow-hidden relative">
-            {/* Header */}
-            <header className="bg-white border-b-4 border-black px-6 py-4 flex items-center justify-between shrink-0 z-10">
-                <div className="flex flex-col">
-                    <span className="font-display font-black text-3xl tracking-tighter uppercase leading-none">Saffi.</span>
-                    {clinicName && (
-                        <span className="text-sm font-bold text-gray-600 uppercase tracking-wide truncate max-w-[200px] mt-1">
-                            {clinicName}
-                        </span>
-                    )}
-                </div>
-                <button className="text-gray-600 hover:text-black transition-colors">
-                    <HelpCircle className="h-6 w-6" />
-                </button>
-            </header>
+            {/* Navbar */}
+            <Navbar clinicName={clinicName} wifiCode={wifiCode} />
 
             <main className="flex-1 flex flex-col px-4 py-4 space-y-4 max-w-md mx-auto w-full min-h-0">
                 {/* Status Message */}
@@ -682,95 +674,16 @@ export default function ClientPortalPage() {
                     )}
                 </div>
 
-                {/* Circular Progress Card - Flexible height */}
-                <motion.div
-                    layout
-                    className={cn(
-                        "flex-1 min-h-0 relative bg-white border-4 border-black shadow-[4px_4px_0px_0px_#000] p-4 flex flex-col items-center justify-center transition-colors duration-500",
-                        isServing && "bg-[#10B981]"
-                    )}
-                >
-                    <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
-                        {/* Ticket Number Badge */}
-                        {ticketNumber && !isServing && (
-                            <div className="flex flex-col items-center gap-2 shrink-0">
-                                <div className="bg-white border-2 border-black px-4 py-2">
-                                    <p className="text-[10px] font-black uppercase tracking-wider text-gray-500">Votre Numéro</p>
-                                    <p className="font-display font-black text-2xl text-center leading-none">{ticketNumber}</p>
-                                </div>
-                                {currentMotif && (
-                                    <div className={cn(
-                                        "px-3 py-1 border-2 border-black rounded-full text-xs font-bold uppercase tracking-wide",
-                                        MOTIFS.find(m => m.value === currentMotif)?.color || "bg-gray-100",
-                                        currentMotif === 'urgence' ? "text-white animate-pulse" : "text-black"
-                                    )}>
-                                        {MOTIFS.find(m => m.value === currentMotif)?.label || currentMotif}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Circular Progress Indicator */}
-                        {isServing ? (
-                            <div className="flex flex-col items-center justify-center flex-1">
-                                <div className="w-[min(30vh,160px)] h-[min(30vh,160px)] rounded-full bg-white border-4 border-black flex flex-col items-center justify-center shadow-[4px_4px_0px_0px_#000]">
-                                    <span className="font-display font-black text-6xl text-black">
-                                        {ticketNumber}
-                                    </span>
-                                </div>
-                                <p className="mt-4 font-black text-lg uppercase tracking-wide text-white drop-shadow-md">Entrez maintenant!</p>
-                            </div>
-                        ) : (
-                            <div className="relative w-[min(30vh,200px)] h-[min(30vh,200px)] shrink-0">
-                                {/* SVG Circle Progress */}
-                                <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
-                                    {/* Background circle */}
-                                    <circle
-                                        cx="100"
-                                        cy="100"
-                                        r="90"
-                                        fill="none"
-                                        stroke="#E5E7EB"
-                                        strokeWidth="12"
-                                    />
-                                    {/* Progress circle */}
-                                    <circle
-                                        cx="100"
-                                        cy="100"
-                                        r="90"
-                                        fill="none"
-                                        stroke="#2C2B57"
-                                        strokeWidth="12"
-                                        strokeLinecap="round"
-                                        strokeDasharray={`${2 * Math.PI * 90}`}
-                                        strokeDashoffset={`${2 * Math.PI * 90 * (1 - progress)}`}
-                                        className="transition-all duration-1000 ease-out"
-                                    />
-                                </svg>
-
-                                {/* Center Content */}
-                                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                    <div className="text-center">
-                                        <p className="font-black text-5xl text-[#2C2B57]">
-                                            {remainingMinutes}<span className="text-2xl">min</span>
-                                        </p>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">
-                                            temps estimé
-                                        </p>
-                                        <div className="mt-2 pt-2 border-t-2 border-gray-200 w-16 mx-auto">
-                                            <p className="font-black text-3xl text-black leading-none">
-                                                {position || '...'}
-                                            </p>
-                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                                                en attente
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </motion.div>
+                {/* Flippable Queue Card */}
+                <div className="flex-1 min-h-0 relative">
+                     <FlipQueueCard 
+                        ticketNumber={ticketNumber || ""}
+                        waitTime={remainingMinutes}
+                        position={position}
+                        isServing={isServing}
+                        currentMotif={currentMotif}
+                     />
+                </div>
 
                 {/* Bottom Actions - Shrinkable */}
                 <div className="shrink-0 space-y-3">

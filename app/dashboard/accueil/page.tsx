@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { getPatients, subscribeToPatients, updatePatientStatus, deletePatient } from "@/lib/patients";
 import { ExcelImporter } from "@/components/ExcelImporter";
 import { ConfirmationModal } from "@/components/dashboard/ConfirmationModal";
+import { RecallModal } from "@/components/RecallModal";
+import { createClient } from "@/utils/supabase/client";
 
 type DBPatient = {
     id: string;
@@ -25,6 +27,7 @@ type DBPatient = {
     updated_at: string;
     motif?: string;
     is_priority?: boolean;
+    recall_sent?: boolean;
 };
 
 export default function AccueilPage() {
@@ -33,6 +36,11 @@ export default function AccueilPage() {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    
+    // Recall Logic State
+    // Recall Logic State
+    const [recallCandidate, setRecallCandidate] = useState<Patient | null>(null);
+    const [doctorName, setDoctorName] = useState<string>("");
 
     // Confirmation Modal State
     const [confirmation, setConfirmation] = useState<{
@@ -52,6 +60,7 @@ export default function AccueilPage() {
     // Fetch patients on mount
     useEffect(() => {
         loadPatients();
+        fetchDoctorName();
 
         // Subscribe to real-time updates
         const unsubscribe = subscribeToPatients(
@@ -74,6 +83,7 @@ export default function AccueilPage() {
         try {
             const data = await getPatients() as DBPatient[];
             setPatients(data);
+            checkQueueForRecall(data);
         } catch (error) {
             console.error("Error loading patients:", error);
             toast.error("Erreur lors du chargement des patients");
@@ -109,7 +119,8 @@ export default function AccueilPage() {
         ticket_number: p.ticket_number,
         motif: p.motif,
         created_at: p.created_at,
-        updated_at: p.updated_at
+        updated_at: p.updated_at,
+        recall_sent: p.recall_sent
     });
 
     const activePatient = patients.find(p => p.status === 'active');
@@ -212,6 +223,58 @@ export default function AccueilPage() {
         } catch (error) {
             console.error(error);
             toast.error("Erreur lors de la mise à jour du statut");
+        }
+    };
+
+    const checkQueueForRecall = (currentPatients: DBPatient[]) => {
+        // Filter waiting or away patients
+        const queue = currentPatients.filter(p => p.status === 'waiting' || p.status === 'away');
+        console.log("Recall Check - Queue/Waiting:", queue.length);
+        
+        // Check if we have at least 3 patients
+        if (queue.length >= 3) {
+            // Get the 3rd patient (index 2)
+            const thirdPatient = queue[2];
+            console.log(`3rd Patient: ${thirdPatient.name} | Status: ${thirdPatient.status} | RecallSent: ${thirdPatient.recall_sent}`);
+            
+            // Check condition: Status is 'away' AND not yet recalled
+            if (thirdPatient.status === 'away' && !thirdPatient.recall_sent) {
+                console.log(">>> TRIGGERING RECALL MODAL <<<");
+                // Determine position for display (it's 3rd)
+                const transformed = transformPatient(thirdPatient, 3);
+                setRecallCandidate(transformed);
+            } else {
+                console.log("Recall conditions not met (Not away OR already sent)");
+            }
+        }
+    };
+
+    const handleRecallConfirm = async () => {
+        if (!recallCandidate) return;
+
+        try {
+            await updatePatient(recallCandidate.id, { recall_sent: true });
+            toast.success("Rappel marqué comme envoyé");
+            setRecallCandidate(null);
+            loadPatients(); 
+        } catch (error) {
+            console.error("Error updating recall status:", error);
+            toast.error("Erreur lors de la mise à jour du statut de rappel");
+        }
+    };
+
+    const fetchDoctorName = async () => {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const { data } = await supabase
+                .from("profiles")
+                .select("full_name")
+                .eq("id", user.id)
+                .single();
+            if (data?.full_name) {
+                setDoctorName(data.full_name);
+            }
         }
     };
 
@@ -347,6 +410,15 @@ export default function AccueilPage() {
                 title={confirmation.title}
                 message={confirmation.message}
                 isDestructive={confirmation.isDestructive}
+            />
+
+            {/* Recall Modal */}
+            <RecallModal
+                isOpen={!!recallCandidate}
+                onClose={() => setRecallCandidate(null)}
+                patient={recallCandidate}
+                doctorName={doctorName}
+                onConfirm={handleRecallConfirm}
             />
         </>
     );

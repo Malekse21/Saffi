@@ -1,21 +1,23 @@
-import Navbar from '@/components/landing/Navbar';
-import Hero from '@/components/landing/Hero';
-import Interfaces from '@/components/landing/Interfaces';
-import Features from '@/components/landing/Features';
-import Testimonials from '@/components/landing/Testimonials';
-import Pricing from '@/components/landing/Pricing';
-import Footer from '@/components/landing/Footer';
+import Navbar from "@/components/landing/Navbar";
+import Hero from "@/components/landing/Hero";
+import Features from "@/components/landing/Features";
+import Interfaces from "@/components/landing/Interfaces";
+import Testimonials from "@/components/landing/Testimonials";
+import Pricing from "@/components/landing/Pricing";
+import Footer from "@/components/landing/Footer";
 
 export default function Home() {
   return (
-    <main className="bg-paper min-h-screen text-black font-body selection:bg-saffi-yellow selection:text-black overflow-x-hidden">
+    <div className="min-h-screen bg-paper font-sans text-black selection:bg-saffi-yellow">
       <Navbar />
-      <Hero />
-      <Interfaces />
-      <Features />
-      <Testimonials />
-      <Pricing />
+      <main>
+        <Hero />
+        <Features />
+        <Interfaces />
+        <Testimonials />
+        <Pricing />
+      </main>
       <Footer />
-    </main>
+    </div>
   );
 }
