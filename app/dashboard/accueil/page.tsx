@@ -233,7 +233,7 @@ export default function AccueilPage() {
         });
     };
 
-    const handleStatusChange = async (patient: Patient, newStatus: 'waiting' | 'away') => {
+    const handleStatusChange = async (patient: Patient, newStatus: 'waiting' | 'away' | 'scheduled') => {
         try {
             await updatePatientStatus(patient.id, newStatus);
             toast.success(`Statut mis à jour: ${newStatus === 'away' ? 'Absent' : 'En attente'}`);

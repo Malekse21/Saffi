@@ -73,22 +73,41 @@ export default function ClientPortalPage() {
         }
     };
 
-    // Calculate position based on patients waiting with earlier created_at
-    const calculatePosition = async (userId: string, myCreatedAt: string) => {
+    // Calculate weighted wait time based on motifs of patients ahead
+    const calculateWaitTime = async (userId: string, myId: string, myCreatedAt: string) => {
         const supabase = createClient();
-        const { data, error } = await supabase
+        
+        // Fetch all waiting patients for this doctor
+        const { data: queueData, error: queueError } = await supabase
             .from('patients')
-            .select('id')
+            .select('id, motif, created_at')
             .eq('user_id', userId)
             .eq('status', 'waiting')
-            .lt('created_at', myCreatedAt);
+            .order('created_at', { ascending: true });
 
-        if (error) {
-            console.error("Error calculating position:", error);
-            return 0;
+        if (queueError) {
+            console.error("Error fetching queue:", queueError);
+            return { position: 0, waitMinutes: 0 };
         }
 
-        return data.length + 1; // Position is count of earlier patients + 1
+        // Calculate position (for display)
+        const myIndex = queueData.findIndex(p => p.id === myId);
+        const position = myIndex >= 0 ? myIndex + 1 : 0;
+
+        // Fetch doctor's average consultation time
+        const { data: profileData } = await supabase
+            .from('profiles')
+            .select('avg_consultation_time')
+            .eq('id', userId)
+            .single();
+
+        const avgTime = profileData?.avg_consultation_time || 20; // Default 20 min
+
+        // Use weighted calculation
+        const { calculateEstWaitTime } = await import('@/utils/queueCalculator');
+        const waitMinutes = calculateEstWaitTime(queueData, myId, avgTime);
+
+        return { position, waitMinutes };
     };
 
     // Fetch clinic user_id on mount
@@ -174,10 +193,12 @@ export default function ClientPortalPage() {
                 setCurrentMotif(patient.motif || null); // Restore motif
                 setHasSubmittedInfo(true);
 
-                // Calculate initial position if waiting
+                // Calculate initial position and wait time if waiting
                 if (patient.status === 'waiting' || patient.status === 'away') {
-                    const pos = await calculatePosition(patient.user_id, patient.created_at);
+                    const { position: pos, waitMinutes } = await calculateWaitTime(patient.user_id, patient.id, patient.created_at);
                     setPosition(pos);
+                    setRemainingMinutes(waitMinutes);
+                    setInitialEstimatedMinutes(waitMinutes);
                 }
             } catch (e) {
                 console.error("Error restoring session:", e);
@@ -226,9 +247,11 @@ export default function ClientPortalPage() {
             setCurrentMotif(patient.motif || null);
             setHasSubmittedInfo(true);
 
-            // Calculate position
-            const pos = await calculatePosition(patient.user_id, patient.created_at);
+            // Calculate position and wait time
+            const { position: pos, waitMinutes } = await calculateWaitTime(patient.user_id, patient.id, patient.created_at);
             setPosition(pos);
+            setRemainingMinutes(waitMinutes);
+            setInitialEstimatedMinutes(waitMinutes);
 
         } catch (error: any) {
             console.error("Join error:", error);
@@ -298,10 +321,14 @@ export default function ClientPortalPage() {
                         playPopSound();
                     }
 
-                    // Recalculate position
+                    // Recalculate position and wait time
                     if (updatedPatient.status === 'waiting') {
-                        const pos = await calculatePosition(updatedPatient.user_id, updatedPatient.created_at);
+                        const { position: pos, waitMinutes } = await calculateWaitTime(updatedPatient.user_id, updatedPatient.id, updatedPatient.created_at);
                         setPosition(pos);
+                        setRemainingMinutes(waitMinutes);
+                        if (waitMinutes > initialEstimatedMinutes) {
+                            setInitialEstimatedMinutes(waitMinutes);
+                        }
                     }
                 }
             )
@@ -403,24 +430,7 @@ export default function ClientPortalPage() {
     // Track previous position to avoid resetting timer on re-renders
     const prevPositionRef = useRef<number | null>(null);
 
-    // Update estimates when position changes
-    useEffect(() => {
-        if (position !== null && position !== prevPositionRef.current) {
-            const minutes = position * 5;
-
-            // Only update if position actually changed
-            setRemainingMinutes(minutes);
-
-            // Update initial estimate if this is a new max (or first run)
-            if (minutes > initialEstimatedMinutes) {
-                setInitialEstimatedMinutes(minutes);
-            }
-
-            prevPositionRef.current = position;
-        }
-    }, [position, initialEstimatedMinutes]);
-
-    // Countdown timer
+    // Countdown timer (wait time is now calculated directly with weighted algorithm)
     useEffect(() => {
         if (remainingMinutes <= 0) return;
 

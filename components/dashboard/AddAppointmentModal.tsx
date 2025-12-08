@@ -29,6 +29,8 @@ export function AddAppointmentModal({ isOpen, onClose, onSuccess, appointment, i
     const [existingAppointments, setExistingAppointments] = useState<any[]>([]);
     const [hasConflict, setHasConflict] = useState(false);
 
+    const supabase = createClient(); // Move to top to avoid re-initialization
+
     // Auto-set priority when "Urgence" is selected
     useEffect(() => {
         if (selectedMotif === 'urgence') {
@@ -149,8 +151,6 @@ export function AddAppointmentModal({ isOpen, onClose, onSuccess, appointment, i
 
         setHasConflict(conflict);
     }, [time, date, existingAppointments, consultationDuration]);
-
-    const supabase = createClient();
 
     // Generate available time slots (8am to 8pm, 30min intervals)
     const generateTimeSlots = () => {
@@ -353,21 +353,21 @@ export function AddAppointmentModal({ isOpen, onClose, onSuccess, appointment, i
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.9, opacity: 0 }}
-                    className="bg-white w-full max-w-md border-4 border-black shadow-[8px_8px_0px_0px_#000] overflow-hidden"
+                    className="bg-white w-full max-w-2xl border-4 border-black shadow-[8px_8px_0px_0px_#000] overflow-hidden"
                 >
-                    <div className="bg-gray-50 border-b-4 border-black p-4 flex items-center justify-between">
-                        <h2 className="font-display font-black text-xl uppercase tracking-wide">
+                    <div className="bg-gray-50 border-b-4 border-black p-2.5 flex items-center justify-between">
+                        <h2 className="font-display font-black text-base uppercase tracking-wide">
                             {appointment ? "Modifier RDV" : "Planifier RDV"}
                         </h2>
                         <button
                             onClick={onClose}
-                            className="p-2 hover:bg-gray-200 rounded-full transition-colors border-2 border-transparent hover:border-black"
+                            className="p-1.5 hover:bg-gray-200 rounded-full transition-colors border-2 border-transparent hover:border-black"
                         >
-                            <X className="h-5 w-5" />
+                            <X className="h-4 w-4" />
                         </button>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <form onSubmit={handleSubmit} className="p-3 space-y-2.5">
                         <div className="space-y-2">
                             <label className="text-xs font-black text-gray-500 uppercase tracking-wider flex items-center gap-2">
                                 <User className="h-4 w-4" /> Nom du Patient *
@@ -377,13 +377,13 @@ export function AddAppointmentModal({ isOpen, onClose, onSuccess, appointment, i
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 required
-                                className="w-full bg-white border-2 border-black h-12 px-4 font-bold focus:outline-none focus:ring-4 focus:ring-[#2C2B57]/20"
+                                className="w-full bg-white border-2 border-black h-10 px-3 font-bold focus:outline-none focus:ring-4 focus:ring-[#2C2B57]/20"
                                 placeholder="Nom complet"
                                 maxLength={30}
                             />
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                             <label className="text-xs font-black text-gray-500 uppercase tracking-wider flex items-center gap-2">
                                 <Phone className="h-4 w-4" /> Téléphone *
                             </label>
@@ -392,14 +392,14 @@ export function AddAppointmentModal({ isOpen, onClose, onSuccess, appointment, i
                                 value={phone}
                                 onChange={(e) => setPhone(e.target.value)}
                                 required
-                                className="w-full bg-white border-2 border-black h-12 px-4 font-bold focus:outline-none focus:ring-4 focus:ring-[#2C2B57]/20"
+                                className="w-full bg-white border-2 border-black h-10 px-3 font-bold focus:outline-none focus:ring-4 focus:ring-[#2C2B57]/20"
                                 placeholder="Numéro de téléphone"
                                 maxLength={8}
                             />
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                                 <label className="text-xs font-black text-gray-500 uppercase tracking-wider flex items-center gap-2">
                                     <Calendar className="h-4 w-4" /> Date *
                                 </label>
@@ -408,16 +408,16 @@ export function AddAppointmentModal({ isOpen, onClose, onSuccess, appointment, i
                                     value={date}
                                     onChange={(e) => setDate(e.target.value)}
                                     required
-                                    className="w-full bg-white border-2 border-black h-12 px-2 font-bold focus:outline-none focus:ring-4 focus:ring-[#2C2B57]/20"
+                                    className="w-full bg-white border-2 border-black h-10 px-2 font-bold focus:outline-none focus:ring-4 focus:ring-[#2C2B57]/20"
                                 />
                             </div>
-                            <div className="space-y-2 col-span-2">
+                            <div className="space-y-1.5 col-span-2">
                                 <label className="text-xs font-black text-gray-500 uppercase tracking-wider flex items-center gap-2">
                                     <Clock className="h-4 w-4" /> Heure *
                                 </label>
                                 {/* Time Slot Grid */}
-                                <div className="border-2 border-black p-3 bg-gray-50 max-h-[200px] overflow-y-auto">
-                                    <div className="grid grid-cols-4 gap-2">
+                                <div className="border-2 border-black p-2 bg-gray-50 max-h-[150px] overflow-y-auto">
+                                    <div className="grid grid-cols-4 gap-1.5">
                                         {generateTimeSlots().map((slot) => {
                                             const blocked = isSlotBlocked(slot);
                                             const selected = time === slot;
@@ -429,7 +429,7 @@ export function AddAppointmentModal({ isOpen, onClose, onSuccess, appointment, i
                                                     onClick={() => !blocked && setTime(slot)}
                                                     disabled={blocked}
                                                     className={`
-                                                        px-3 py-2 text-sm font-bold border-2 border-black transition-all
+                                                        px-2 py-1.5 text-xs font-bold border-2 border-black transition-all
                                                         ${blocked 
                                                             ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-50' 
                                                             : selected

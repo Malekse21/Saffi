@@ -22,11 +22,14 @@ export default function CalendarPage() {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [appointments, setAppointments] = useState<Appointment[]>([]);
-    const [monthAppointments, setMonthAppointments] = useState<Appointment[]>([]);
+    const [monthAppointments, setMonthAppointments] = useState<any[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingAppointment, setEditingAppointment] = useState<Appointment | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
     const [consultationDuration, setConsultationDuration] = useState(30); // Default 30min
+    const [searchQuery, setSearchQuery] = useState("");
+    const [highlightedDays, setHighlightedDays] = useState<Date[]>([]);
+    const [searchResults, setSearchResults] = useState<Appointment[]>([]);
 
     const supabase = createClient();
 
@@ -102,6 +105,80 @@ export default function CalendarPage() {
         }
     };
 
+    // Search for patient appointments and highlight days
+    useEffect(() => {
+        const searchPatientAppointments = async () => {
+            if (!searchQuery || searchQuery.length < 2) {
+                setHighlightedDays([]);
+                setSearchResults([]);
+                return;
+            }
+
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) {
+                    setHighlightedDays([]);
+                    setSearchResults([]);
+                    return;
+                }
+
+                // Fetch all appointments for the user
+                const { data, error } = await supabase
+                    .from('appointments')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .order('start_time', { ascending: true });
+
+                if (error && (error.code || error.message || error.details)) {
+                    console.error('Error fetching appointments for search:', error);
+                }
+                
+                if (error || !data) {
+                    setHighlightedDays([]);
+                    setSearchResults([]);
+                    return;
+                }
+
+                // Filter results in JavaScript
+                const query = searchQuery.toLowerCase().trim();
+                const filtered = (data || []).filter(apt => 
+                    apt.patient_name?.toLowerCase().includes(query) ||
+                    apt.phone?.toLowerCase().includes(query) ||
+                    apt.phone?.includes(query)
+                );
+
+                setSearchResults(filtered);
+
+                if (filtered.length === 0) {
+                    setHighlightedDays([]);
+                    return;
+                }
+
+                // Extract unique dates
+                const uniqueDates = new Map<string, Date>();
+                filtered.forEach(apt => {
+                    const date = new Date(apt.start_time);
+                    date.setHours(0, 0, 0, 0);
+                    const dateKey = date.toISOString();
+                    if (!uniqueDates.has(dateKey)) {
+                        uniqueDates.set(dateKey, date);
+                    }
+                });
+
+                setHighlightedDays(Array.from(uniqueDates.values()));
+            } catch (error) {
+                // Only log actual errors
+                if (error && typeof error === 'object' && Object.keys(error).length > 0) {
+                    console.error('Error searching appointments:', error);
+                }
+                setHighlightedDays([]);
+                setSearchResults([]);
+            }
+        };
+
+        searchPatientAppointments();
+    }, [searchQuery]);
+
     const handleDelete = async (id: string, name: string) => {
         if (!confirm(`Voulez-vous vraiment supprimer le RDV de ${name} ?`)) return;
 
@@ -137,8 +214,8 @@ export default function CalendarPage() {
 
     const renderHeader = () => {
         return (
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between mb-4 gap-4">
+                <div className="flex items-center gap-4 flex-1">
                     <h2 className="text-2xl font-black uppercase tracking-tight">
                         {format(currentDate, "MMMM yyyy", { locale: fr })}
                     </h2>
@@ -150,14 +227,55 @@ export default function CalendarPage() {
                             <ChevronRight className="w-5 h-5" />
                         </button>
                     </div>
+                    {/* Search Field */}
+                    <div className="flex-1 max-w-xs relative">
+                        <input
+                            type="text"
+                            placeholder="Rechercher par nom ou téléphone..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && searchResults.length > 0) {
+                                    setSelectedDate(new Date(searchResults[0].start_time));
+                                    // Don't clear search to keep highlights visible
+                                }
+                            }}
+                            className="w-full px-3 py-2 border-2 border-black focus:outline-none focus:ring-2 focus:ring-[#A855F7] font-bold text-sm"
+                        />
+                        {/* Search Results Dropdown */}
+                        {searchQuery.length >= 2 && searchResults.length > 0 && (
+                            <div className="absolute top-full mt-1 w-full bg-white border-2 border-black shadow-[4px_4px_0px_0px_#000] max-h-60 overflow-y-auto z-50">
+                                <div className="p-2 bg-gray-100 border-b-2 border-black">
+                                    <p className="text-xs font-bold uppercase text-gray-600">
+                                        {searchResults.length} résultat{searchResults.length > 1 ? 's' : ''}
+                                    </p>
+                                </div>
+                                {searchResults.map((result) => (
+                                    <div
+                                        key={result.id}
+                                        onClick={() => {
+                                            setSelectedDate(new Date(result.start_time));
+                                            // Don't clear search to keep highlights
+                                        }}
+                                        className="p-3 border-b border-gray-200 hover:bg-[#A855F7]/10 cursor-pointer transition-colors"
+                                    >
+                                        <p className="font-bold text-sm">{result.patient_name}</p>
+                                        <p className="text-xs text-gray-600">{result.phone}</p>
+                                        <p className="text-xs text-[#A855F7] font-bold mt-1">
+                                            {format(parseISO(result.start_time), "EEEE d MMMM yyyy 'à' HH:mm", { locale: fr })}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <button
                     onClick={() => {
                         setEditingAppointment(undefined);
                         setIsModalOpen(true);
                     }}
-                    className="flex items-center gap-2 bg-[#A855F7] text-white px-4 py-2 font-bold uppercase border-2 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all text-sm"
-                >
+                    className="flex items-center gap-2 bg-[#A855F7] text-white px-4 py-2 font-bold uppercase border-2 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all text-sm">
                     <Plus className="w-5 h-5" />
                     Nouveau RDV
                 </button>
@@ -183,10 +301,6 @@ export default function CalendarPage() {
         const monthEnd = endOfMonth(monthStart);
         const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
         const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
-        const rows = [];
-        let days = [];
-        let day = startDate;
-        let formattedDate = "";
 
         const allDays = eachDayOfInterval({
             start: startDate,
@@ -196,7 +310,7 @@ export default function CalendarPage() {
         return (
             <div className="grid grid-cols-7 gap-4">
                 {allDays.map((dayItem, idx) => {
-                    formattedDate = format(dayItem, "d");
+                    const formattedDate = format(dayItem, "d");
                     const cloneDay = dayItem;
                     
                     // Count appointments for this day
@@ -207,15 +321,17 @@ export default function CalendarPage() {
                     const isSelected = isSameDay(dayItem, selectedDate);
                     const isTodayItem = isToday(dayItem);
                     const isCurrentMonth = isSameMonth(dayItem, monthStart);
+                    const isHighlighted = highlightedDays.some(hDay => isSameDay(hDay, dayItem));
 
                     return (
                         <div
                             key={idx}
                             className={`
-                                relative min-h-[90px] p-2 border-2 border-black transition-all cursor-pointer group flex flex-col items-start justify-between
+                                relative min-h-[90px] p-2 border-2 transition-all cursor-pointer group flex flex-col items-start justify-between
                                 ${!isCurrentMonth ? "bg-gray-100/50 text-gray-400" : "bg-white"}
-                                ${isSelected ? "!bg-[#2C2B57] text-white shadow-[4px_4px_0px_0px_#000]" : "hover:shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1"}
+                                ${isSelected ? "!bg-[#2C2B57] text-white shadow-[4px_4px_0px_0px_#000] border-black" : "hover:shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1"}
                                 ${isTodayItem && !isSelected ? "bg-[repeating-linear-gradient(45deg,#fef3c7,#fef3c7_10px,#fffbeb_10px,#fffbeb_20px)]" : ""}
+                                ${isHighlighted && !isSelected ? "!bg-[#A855F7]/30 !border-[#A855F7] !border-4" : "border-black"}
                             `}
                             onClick={() => onDateClick(cloneDay)}
                         >
@@ -277,7 +393,17 @@ export default function CalendarPage() {
                         <div className="space-y-2">
                             {appointments.map((apt) => {
                                 const startTime = parseISO(apt.start_time);
-                                const endTime = new Date(startTime.getTime() + consultationDuration * 60000);
+                                
+                                // Calculate weighted duration based on motif
+                                const getWeightedDuration = (motif: string) => {
+                                    const { MOTIFS } = require('@/lib/motifs');
+                                    const motifConfig = MOTIFS.find((m: any) => m.value === motif);
+                                    const weight = motifConfig?.weight ?? 1.0;
+                                    return Math.round(consultationDuration * weight);
+                                };
+                                
+                                const duration = getWeightedDuration(apt.motif);
+                                const endTime = new Date(startTime.getTime() + duration * 60000);
                                 
                                 return (
                                     <div key={apt.id} className="group relative bg-white border-2 border-black p-4 shadow-[2px_2px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_0px_#000] transition-all">
@@ -290,7 +416,7 @@ export default function CalendarPage() {
                                                 </div>
                                                 {/* Duration Badge */}
                                                 <div className="bg-yellow-300 text-black px-2 py-1 border-2 border-black text-xs font-bold">
-                                                    {consultationDuration}min
+                                                    {duration}min
                                                 </div>
                                             </div>
                                             
