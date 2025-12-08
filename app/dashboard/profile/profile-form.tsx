@@ -104,7 +104,10 @@ export default function ProfileForm({ profile }: { profile: any }) {
                 setAvatarUrl(data.signedUrl);
             }
 
-            router.refresh();
+            // Force full reload to update avatar everywhere
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
         }
 
         setUploading(false);
@@ -139,7 +142,10 @@ export default function ProfileForm({ profile }: { profile: any }) {
                     fontWeight: 'bold',
                 },
             });
-            router.refresh();
+            // Force full reload to update all pages with new profile data
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
         }
     };
 

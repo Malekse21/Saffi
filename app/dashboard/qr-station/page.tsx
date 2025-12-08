@@ -113,8 +113,16 @@ export default function QRStationPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 p-8 flex items-center justify-center">
-                <Loader2 className="h-12 w-12 animate-spin text-black" />
+            <div className="h-[calc(100vh-4rem)] bg-white p-6 overflow-hidden flex items-center justify-center">
+                <div className="border-2 border-black p-8 bg-white shadow-[4px_4px_0px_0px_#000] animate-pulse w-[380px]">
+                    <div className="h-6 w-48 bg-gray-300 mb-6 mx-auto"></div>
+                    <div className="h-64 w-64 bg-gray-200 border-2 border-black mx-auto mb-6"></div>
+                    <div className="space-y-3">
+                        <div className="h-10 w-full bg-gray-100 border-2 border-black"></div>
+                        <div className="h-10 w-full bg-gray-100 border-2 border-black"></div>
+                        <div className="h-10 w-full bg-gray-100 border-2 border-black"></div>
+                    </div>
+                </div>
             </div>
         );
     }

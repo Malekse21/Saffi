@@ -25,6 +25,9 @@ export function AddAppointmentModal({ isOpen, onClose, onSuccess, appointment, i
     const [selectedMotif, setSelectedMotif] = useState<MotifValue>("consultation");
     const [isPriority, setIsPriority] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [consultationDuration, setConsultationDuration] = useState(30); // Default 30min
+    const [existingAppointments, setExistingAppointments] = useState<any[]>([]);
+    const [hasConflict, setHasConflict] = useState(false);
 
     // Auto-set priority when "Urgence" is selected
     useEffect(() => {
@@ -65,7 +68,124 @@ export function AddAppointmentModal({ isOpen, onClose, onSuccess, appointment, i
         }
     }, [isOpen, appointment, initialDate]);
 
+    // Fetch doctor's consultation duration
+    useEffect(() => {
+        const fetchConsultationDuration = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data } = await supabase
+                    .from('profiles')
+                    .select('consultation_duration')
+                    .eq('id', user.id)
+                    .single();
+                if (data?.consultation_duration) {
+                    setConsultationDuration(data.consultation_duration);
+                }
+            }
+        };
+        if (isOpen) {
+            fetchConsultationDuration();
+        }
+    }, [isOpen]);
+
+    // Fetch existing appointments for the selected date
+    useEffect(() => {
+        const fetchExistingAppointments = async () => {
+            if (!date) return;
+            
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            const startOfDay = new Date(date);
+            startOfDay.setHours(0, 0, 0, 0);
+            
+            const endOfDay = new Date(date);
+            endOfDay.setHours(23, 59, 59, 999);
+
+            const { data } = await supabase
+                .from('appointments')
+                .select('id, start_time')
+                .eq('doctor_id', user.id)
+                .gte('start_time', startOfDay.toISOString())
+                .lte('start_time', endOfDay.toISOString());
+
+            if (data) {
+                // Exclude current appointment if editing
+                const filtered = appointment 
+                    ? data.filter(apt => apt.id !== appointment.id)
+                    : data;
+                setExistingAppointments(filtered);
+            }
+        };
+
+        fetchExistingAppointments();
+    }, [date, isOpen, appointment]);
+
+    // Check for time conflicts
+    useEffect(() => {
+        if (!time || !date || existingAppointments.length === 0) {
+            setHasConflict(false);
+            return;
+        }
+
+        const [hours, minutes] = time.split(':').map(Number);
+        const newStartTime = new Date(date);
+        newStartTime.setHours(hours, minutes, 0, 0);
+        
+        const newEndTime = new Date(newStartTime.getTime() + consultationDuration * 60000);
+
+        // Check if new appointment overlaps with any existing appointment
+        const conflict = existingAppointments.some(apt => {
+            const existingStart = new Date(apt.start_time);
+            const existingEnd = new Date(existingStart.getTime() + consultationDuration * 60000);
+
+            // Check for overlap: new appointment starts or ends during existing appointment
+            const startsWithin = newStartTime >= existingStart && newStartTime < existingEnd;
+            const endsWithin = newEndTime > existingStart && newEndTime <= existingEnd;
+            const encompasses = newStartTime <= existingStart && newEndTime >= existingEnd;
+
+            return startsWithin || endsWithin || encompasses;
+        });
+
+        setHasConflict(conflict);
+    }, [time, date, existingAppointments, consultationDuration]);
+
     const supabase = createClient();
+
+    // Generate available time slots (8am to 8pm, 30min intervals)
+    const generateTimeSlots = () => {
+        const slots = [];
+        for (let hour = 8; hour <= 19; hour++) {
+            for (let minute of [0, 30]) {
+                if (hour === 19 && minute === 30) break; // Stop at 19:30
+                const timeString = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                slots.push(timeString);
+            }
+        }
+        return slots;
+    };
+
+    // Check if a time slot is blocked by existing appointments
+    const isSlotBlocked = (slotTime: string) => {
+        if (!date || existingAppointments.length === 0) return false;
+
+        const [hours, minutes] = slotTime.split(':').map(Number);
+        const slotStart = new Date(date);
+        slotStart.setHours(hours, minutes, 0, 0);
+        
+        const slotEnd = new Date(slotStart.getTime() + consultationDuration * 60000);
+
+        return existingAppointments.some(apt => {
+            const existingStart = new Date(apt.start_time);
+            const existingEnd = new Date(existingStart.getTime() + consultationDuration * 60000);
+
+            const startsWithin = slotStart >= existingStart && slotStart < existingEnd;
+            const endsWithin = slotEnd > existingStart && slotEnd <= existingEnd;
+            const encompasses = slotStart <= existingStart && slotEnd >= existingEnd;
+
+            return startsWithin || endsWithin || encompasses;
+        });
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -92,6 +212,11 @@ export function AddAppointmentModal({ isOpen, onClose, onSuccess, appointment, i
 
         if (!date || !time) {
             toast.error("La date et l'heure sont obligatoires");
+            return;
+        }
+
+        if (hasConflict) {
+            toast.error("Ce créneau horaire est déjà occupé");
             return;
         }
 
@@ -286,19 +411,73 @@ export function AddAppointmentModal({ isOpen, onClose, onSuccess, appointment, i
                                     className="w-full bg-white border-2 border-black h-12 px-2 font-bold focus:outline-none focus:ring-4 focus:ring-[#2C2B57]/20"
                                 />
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-2 col-span-2">
                                 <label className="text-xs font-black text-gray-500 uppercase tracking-wider flex items-center gap-2">
                                     <Clock className="h-4 w-4" /> Heure *
                                 </label>
-                                <input
-                                    type="time"
-                                    value={time}
-                                    onChange={(e) => setTime(e.target.value)}
-                                    required
-                                    className="w-full bg-white border-2 border-black h-12 px-2 font-bold focus:outline-none focus:ring-4 focus:ring-[#2C2B57]/20"
-                                />
+                                {/* Time Slot Grid */}
+                                <div className="border-2 border-black p-3 bg-gray-50 max-h-[200px] overflow-y-auto">
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {generateTimeSlots().map((slot) => {
+                                            const blocked = isSlotBlocked(slot);
+                                            const selected = time === slot;
+                                            
+                                            return (
+                                                <button
+                                                    key={slot}
+                                                    type="button"
+                                                    onClick={() => !blocked && setTime(slot)}
+                                                    disabled={blocked}
+                                                    className={`
+                                                        px-3 py-2 text-sm font-bold border-2 border-black transition-all
+                                                        ${blocked 
+                                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-50' 
+                                                            : selected
+                                                                ? 'bg-[#2C2B57] text-white'
+                                                                : 'bg-white hover:bg-gray-100'
+                                                        }
+                                                    `}
+                                                >
+                                                    {slot}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             </div>
                         </div>
+
+                        {/* Time Allocation Display */}
+                        {time && (
+                            <div className="bg-yellow-50 border-2 border-yellow-400 p-3 rounded">
+                                <p className="text-xs font-bold text-yellow-800 uppercase mb-2">⏱️ Temps Alloué</p>
+                                <div className="flex items-center gap-2">
+                                    <div className="bg-[#2C2B57] text-white px-3 py-1.5 border-2 border-black text-sm font-bold">
+                                        {time} - {(() => {
+                                            if (!time) return "--:--";
+                                            const [hours, minutes] = time.split(':').map(Number);
+                                            const totalMinutes = hours * 60 + minutes + consultationDuration;
+                                            const endHours = Math.floor(totalMinutes / 60) % 24;
+                                            const endMinutes = totalMinutes % 60;
+                                            return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+                                        })()}
+                                    </div>
+                                    <div className="bg-yellow-300 text-black px-2 py-1 border-2 border-black text-xs font-bold">
+                                        {consultationDuration}min
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Conflict Warning */}
+                        {hasConflict && time && (
+                            <div className="bg-red-50 border-2 border-red-500 p-3 rounded">
+                                <p className="text-sm font-bold text-red-700 flex items-center gap-2">
+                                    <span className="text-lg">⚠️</span>
+                                    Conflit détecté ! Ce créneau horaire est déjà occupé par un autre rendez-vous.
+                                </p>
+                            </div>
+                        )}
 
                         <div className="space-y-2">
                             <label className="text-xs font-black text-gray-500 uppercase tracking-wider flex items-center gap-2">

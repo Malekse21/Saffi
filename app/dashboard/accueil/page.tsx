@@ -12,6 +12,7 @@ import { ExcelImporter } from "@/components/ExcelImporter";
 import { ConfirmationModal } from "@/components/dashboard/ConfirmationModal";
 import { RecallModal } from "@/components/RecallModal";
 import { createClient } from "@/utils/supabase/client";
+import { useSound } from "@/hooks/useSound";
 
 type DBPatient = {
     id: string;
@@ -31,6 +32,7 @@ type DBPatient = {
 };
 
 export default function AccueilPage() {
+    const { playSound } = useSound();
     const [patients, setPatients] = useState<DBPatient[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -147,6 +149,7 @@ export default function AccueilPage() {
             // If there is an active patient, mark them as completed
             if (activePatient) {
                 await updatePatientStatus(activePatient.id, 'completed');
+                playSound('success'); // Sound for completing patient
             }
 
             // Get next waiting patient (skip 'away' patients)
@@ -154,6 +157,7 @@ export default function AccueilPage() {
 
             if (nextPatient) {
                 await updatePatientStatus(nextPatient.id, 'active');
+                playSound('callPatient'); // Special sound for calling patient
                 toast.success(`Patient ${nextPatient.name} appelé!`);
             } else {
                 // Check if there are any patients at all (including away)
@@ -175,6 +179,7 @@ export default function AccueilPage() {
     };
 
     const handleAddPatient = () => {
+        playSound('click');
         setIsModalOpen(true);
     };
 
@@ -373,8 +378,25 @@ export default function AccueilPage() {
                         </div>
 
                         {isLoading ? (
-                            <div className="border-2 border-black border-dashed p-8 text-center bg-gray-50">
-                                <p className="text-gray-500 font-medium">Chargement...</p>
+                            <div className="space-y-4">
+                                {Array.from({ length: 3 }).map((_, i) => (
+                                    <div key={i} className="border-2 border-black p-4 bg-white shadow-[4px_4px_0px_0px_#000] animate-pulse">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-12 w-12 bg-gray-200 border-2 border-black"></div>
+                                                <div className="space-y-2">
+                                                    <div className="h-5 w-32 bg-gray-300"></div>
+                                                    <div className="h-3 w-24 bg-gray-200"></div>
+                                                </div>
+                                            </div>
+                                            <div className="h-6 w-6 bg-gray-200"></div>
+                                        </div>
+                                        <div className="flex gap-2 mt-3">
+                                            <div className="h-8 w-20 bg-gray-200 border-2 border-black"></div>
+                                            <div className="h-8 w-20 bg-gray-200 border-2 border-black"></div>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         ) : (
                             <div className="space-y-4">

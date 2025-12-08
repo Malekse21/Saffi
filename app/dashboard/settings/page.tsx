@@ -179,7 +179,18 @@ export default function SettingsPage() {
             {/* Content */}
             <div className="rounded-xl border-2 border-black bg-white p-8 shadow-[8px_8px_0px_0px_#000]">
                 {loading ? (
-                    <div className="text-center font-bold">Chargement...</div>
+                    <div className="space-y-6 animate-pulse">
+                        <div className="rounded-lg border-2 border-black bg-gray-50 p-6">
+                            <div className="h-5 w-32 bg-gray-300 mb-2"></div>
+                            <div className="h-4 w-48 bg-gray-200 mb-4"></div>
+                            <div className="h-10 w-full bg-gray-100 border-2 border-black"></div>
+                        </div>
+                        <div className="rounded-lg border-2 border-black bg-gray-50 p-6">
+                            <div className="h-5 w-32 bg-gray-300 mb-2"></div>
+                            <div className="h-4 w-48 bg-gray-200 mb-4"></div>
+                            <div className="h-10 w-full bg-gray-100 border-2 border-black"></div>
+                        </div>
+                    </div>
                 ) : (
                     <>
                         {/* TV Tab */}

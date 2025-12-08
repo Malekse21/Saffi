@@ -26,6 +26,7 @@ export default function CalendarPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingAppointment, setEditingAppointment] = useState<Appointment | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
+    const [consultationDuration, setConsultationDuration] = useState(30); // Default 30min
 
     const supabase = createClient();
 
@@ -38,6 +39,24 @@ export default function CalendarPage() {
     useEffect(() => {
         fetchMonthAppointments(currentDate);
     }, [currentDate]);
+
+    // Fetch doctor's consultation duration
+    useEffect(() => {
+        const fetchConsultationDuration = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data } = await supabase
+                    .from('profiles')
+                    .select('consultation_duration')
+                    .eq('id', user.id)
+                    .single();
+                if (data?.consultation_duration) {
+                    setConsultationDuration(data.consultation_duration);
+                }
+            }
+        };
+        fetchConsultationDuration();
+    }, []);
 
     const fetchDayAppointments = async (date: Date) => {
         setIsLoading(true);
@@ -240,50 +259,79 @@ export default function CalendarPage() {
 
                 <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
                     {isLoading ? (
-                         <div className="text-center py-10 text-gray-500 font-bold animate-pulse">Chargement...</div>
+                        <div className="space-y-4">
+                            {Array.from({ length: 3 }).map((_, i) => (
+                                <div key={i} className="bg-white border-2 border-black p-3 shadow-[2px_2px_0px_0px_#000] animate-pulse">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="h-8 w-20 bg-gray-200 border-2 border-black"></div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div className="h-5 w-3/4 bg-gray-300"></div>
+                                        <div className="h-4 w-1/2 bg-gray-200"></div>
+                                        <div className="h-4 w-2/3 bg-gray-200"></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     ) : appointments.length > 0 ? (
-                        appointments.map((apt) => (
-                            <div key={apt.id} className="group relative bg-white border-2 border-black p-3 shadow-[2px_2px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_0px_#000] transition-all">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded border-2 border-black">
-                                        <Clock className="w-4 h-4" />
-                                        <span className="font-black">
-                                            {format(parseISO(apt.start_time), "HH:mm")}
-                                        </span>
+                        <div className="space-y-2">
+                            {appointments.map((apt) => {
+                                const startTime = parseISO(apt.start_time);
+                                const endTime = new Date(startTime.getTime() + consultationDuration * 60000);
+                                
+                                return (
+                                    <div key={apt.id} className="group relative bg-white border-2 border-black p-4 shadow-[2px_2px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_0px_#000] transition-all">
+                                        {/* Time Block Header */}
+                                        <div className="flex justify-between items-center mb-3">
+                                            <div className="flex items-center gap-3">
+                                                {/* Start-End Time Badge */}
+                                                <div className="bg-[#2C2B57] text-white px-3 py-1.5 border-2 border-black font-bold text-sm">
+                                                    {format(startTime, "HH:mm")} - {format(endTime, "HH:mm")}
+                                                </div>
+                                                {/* Duration Badge */}
+                                                <div className="bg-yellow-300 text-black px-2 py-1 border-2 border-black text-xs font-bold">
+                                                    {consultationDuration}min
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Action Buttons */}
+                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button 
+                                                    onClick={() => handleEdit(apt)}
+                                                    className="p-1.5 hover:bg-gray-100 rounded border border-transparent hover:border-black transition-all"
+                                                    title="Modifier"
+                                                >
+                                                    <Edit className="w-4 h-4 text-gray-600" />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDelete(apt.id, apt.patient_name)}
+                                                    className="p-1.5 hover:bg-red-50 rounded border border-transparent hover:border-red-500 transition-all"
+                                                    title="Supprimer"
+                                                >
+                                                    <Trash2 className="w-4 h-4 text-red-500" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Patient Info */}
+                                        <div className="space-y-2 border-l-4 border-[#2C2B57] pl-3">
+                                            <div className="flex items-center gap-2">
+                                                <User className="w-4 h-4 text-gray-400" />
+                                                <span className="font-bold text-lg">{apt.patient_name}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                                                <Phone className="w-4 h-4" />
+                                                <span>{apt.phone}</span>
+                                            </div>
+                                            <div className="pt-2 border-t-2 border-gray-100 text-sm font-medium">
+                                                <span className="text-gray-400 uppercase text-xs font-bold mr-2">Motif:</span>
+                                                {apt.motif}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button 
-                                        onClick={() => handleEdit(apt)}
-                                        className="p-1 hover:bg-gray-100 rounded border border-transparent hover:border-black transition-all"
-                                        title="Modifier"
-                                    >
-                                        <Edit className="w-4 h-4 text-gray-600" />
-                                    </button>
-                                    <button 
-                                        onClick={() => handleDelete(apt.id, apt.patient_name)}
-                                        className="p-1 hover:bg-red-50 rounded border border-transparent hover:border-red-500 transition-all"
-                                        title="Supprimer"
-                                    >
-                                        <Trash2 className="w-4 h-4 text-red-500" />
-                                    </button>
-                                </div>
-                                <div className="space-y-2">
-                                    <div className="flex items-center gap-2">
-                                        <User className="w-4 h-4 text-gray-400" />
-                                        <span className="font-bold text-lg">{apt.patient_name}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                        <Phone className="w-4 h-4" />
-                                        <span>{apt.phone}</span>
-                                    </div>
-                                    <div className="mt-3 pt-3 border-t-2 border-gray-100 text-sm font-medium">
-                                        <span className="text-gray-400 uppercase text-xs font-bold mr-2">Motif:</span>
-                                        {apt.motif}
-                                    </div>
-                                </div>
-                            </div>
-                        ))
+                                );
+                            })}
+                        </div>
                     ) : (
                         <div className="border-2 border-black border-dashed p-8 text-center bg-gray-50">
                             <CalendarIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />

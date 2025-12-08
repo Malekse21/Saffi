@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
-import { Toaster } from "sonner";
+import { SoundToaster } from "@/components/SoundToaster";
 
 
 
@@ -54,7 +54,7 @@ export default function RootLayout({
         className={`${ordinary.variable} font-sans bg-paper-white text-black antialiased selection:bg-solar-yellow selection:text-black`}
       >
         {children}
-        <Toaster position="top-center" />
+        <SoundToaster />
       </body>
     </html>
   );

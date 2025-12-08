@@ -137,7 +137,7 @@ export default function AnalyticsPage() {
             patientsPerDay = hourlyCounts.map((count, index) => ({
                 name: `${index}h`,
                 patients: count
-            }));
+            })).filter((_, index) => index >= 6 && index <= 20);
         } else if (range === "month") {
             // Group by day of month (1-31)
             const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
@@ -281,9 +281,46 @@ export default function AnalyticsPage() {
             </div>
 
             {loading ? (
-                <div className="flex-1 flex items-center justify-center">
-                    <Loader2 className="h-12 w-12 animate-spin text-[#000000]" />
-                </div>
+                <>
+                    {/* Skeleton for ROI Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 shrink-0">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                            <div key={i} className="border-2 border-black p-5 bg-white shadow-[4px_4px_0px_0px_#000] animate-pulse">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="h-10 w-10 bg-gray-200 border-2 border-black"></div>
+                                    <div className="h-10 w-24 bg-gray-300"></div>
+                                </div>
+                                <div className="h-6 w-32 bg-gray-200 mt-4"></div>
+                                <div className="h-4 w-40 bg-gray-100 mt-2"></div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Skeleton for Charts */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
+                        {/* Bar Chart Skeleton */}
+                        <div className="lg:col-span-2 bg-white border-2 border-black p-5 shadow-[4px_4px_0px_0px_#000] animate-pulse">
+                            <div className="h-6 w-48 bg-gray-300 mb-4"></div>
+                            <div className="flex items-end gap-2 h-64">
+                                {Array.from({ length: 15 }).map((_, i) => (
+                                    <div
+                                        key={i}
+                                        className="flex-1 bg-gray-200 border-2 border-black"
+                                        style={{ height: `${Math.random() * 60 + 40}%` }}
+                                    ></div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Pie Chart Skeleton */}
+                        <div className="bg-white border-2 border-black p-5 shadow-[4px_4px_0px_0px_#000] animate-pulse">
+                            <div className="h-6 w-48 bg-gray-300 mb-4"></div>
+                            <div className="flex items-center justify-center h-64">
+                                <div className="h-48 w-48 bg-gray-200 rounded-full border-4 border-black"></div>
+                            </div>
+                        </div>
+                    </div>
+                </>
             ) : (
                 <>
                     {/* Section 1: ROI Cards */}
