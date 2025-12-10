@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Maximize, Minimize, Volume2, VolumeX, Cast } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { getPatients, subscribeToPatients } from "@/lib/patients";
 
@@ -178,23 +179,9 @@ export default function TVPage() {
                         position: index + 1
                     }));
 
-                // Check for status change to trigger announcement
-                setActivePatient(prev => {
-                    if (active && active.id !== prev?.id) {
-                        // New active patient!
-                        playNotificationSound(active.ticket_number || "Suivant");
-
-                        return {
-                            id: active.id,
-                            ticketNumber: active.ticket_number || "---",
-                            name: active.name,
-                            status: active.status,
-                            type: active.type,
-                            rdvTime: active.rdv_time,
-                            position: 0
-                        };
-                    }
-                    return active ? {
+                // Save to localStorage for offline use
+                const tvData = {
+                    active: active ? {
                         id: active.id,
                         ticketNumber: active.ticket_number || "---",
                         name: active.name,
@@ -202,14 +189,44 @@ export default function TVPage() {
                         type: active.type,
                         rdvTime: active.rdv_time,
                         position: 0
-                    } : null;
+                    } : null,
+                    queue: waiting
+                };
+                localStorage.setItem('saffi_tv_cache', JSON.stringify(tvData));
+
+                // Check for status change to trigger announcement
+                setActivePatient(prev => {
+                    const newActive = tvData.active;
+                    if (newActive && newActive.id !== prev?.id) {
+                        // New active patient!
+                        playNotificationSound(newActive.ticketNumber);
+                        return newActive;
+                    }
+                    return newActive;
                 });
 
                 setQueue(waiting);
             } catch (error) {
                 console.error("Error loading TV data:", error);
+                
+                // Fallback to cache if network error
+                const cached = localStorage.getItem('saffi_tv_cache');
+                if (cached) {
+                    const { active, queue } = JSON.parse(cached);
+                    setActivePatient(active);
+                    setQueue(queue);
+                    toast.warning("Mode hors ligne. Affichage des dernières données connues.");
+                }
             }
         };
+
+        // Initial load from cache to be instant
+        const cached = localStorage.getItem('saffi_tv_cache');
+        if (cached) {
+            const { active, queue } = JSON.parse(cached);
+            setActivePatient(active);
+            setQueue(queue);
+        }
 
         loadData();
 

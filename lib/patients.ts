@@ -1,4 +1,6 @@
 import { createClient } from '@/utils/supabase/client';
+import { OfflineQueue } from '@/lib/offline-sync';
+import { toast } from 'sonner';
 
 export interface Patient {
     id: string;
@@ -27,6 +29,9 @@ export interface QueueSettings {
     updated_at: string;
 }
 
+// Helper to check connectivity
+const isOffline = () => typeof navigator !== 'undefined' && !navigator.onLine;
+
 /**
  * Get the next ticket number for the current user
  */
@@ -35,6 +40,15 @@ export async function getNextTicketNumber(): Promise<string> {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) throw new Error('User not authenticated');
+
+    // If offline, we can't reliably predict the next ticket without risk.
+    // However, if we are in "Offline Mode", the user might accept a temp ticket.
+    // Let's assume the user has a locally cached state or we fetch from DB.
+    // If offline, we throw or handle in addPatient. 
+    // Here we just try to fetch.
+    if (isOffline()) {
+        return "Offline"; // Special marker or estimate? Let's handle in addPatient.
+    }
 
     // Get or create queue settings
     let { data: settings } = await supabase
@@ -75,6 +89,16 @@ export async function getPatients(): Promise<Patient[]> {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) throw new Error('User not authenticated');
+    
+    // If offline, we should try to return cached data if available + queued items?
+    // But this function is typically SWR or real-time.
+    // The UI (dashboard) might handle the caching or optimistic updates.
+    // For now, if offline, this would fail.
+    // We let it fail here, and let the UI/Hook handle fallback if desired, 
+    // BUT we should merge the offline queue items if possible?
+    // It's safer to let the UI hook handle "useNetworkStatus" + "OfflineQueue".
+    // Or we update this to return mixed data.
+    // For now, standard fetch.
 
     const { data, error } = await supabase
         .from('patients')
@@ -83,7 +107,10 @@ export async function getPatients(): Promise<Patient[]> {
         .order('position', { ascending: true })
         .order('created_at', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+        if (isOffline()) return []; // or handle better
+        throw error;
+    }
     return data || [];
 }
 
@@ -91,6 +118,8 @@ export async function getPatients(): Promise<Patient[]> {
  * Get the next position for a new patient
  */
 async function getNextPosition(userId: string): Promise<number> {
+    if (isOffline()) return 999; // Arbitrary high number for offline
+    
     const supabase = createClient();
 
     const { data, error } = await supabase
@@ -125,6 +154,38 @@ export async function addPatient(
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) throw new Error('User not authenticated');
+
+    // OFFLINE HANDLING
+    if (isOffline()) {
+        const tempId = `temp_${crypto.randomUUID()}`;
+        const tempTicket = "OFF";
+        const tempPosition = 999;
+        
+        const optimisticPatient: Patient = {
+            id: tempId,
+            user_id: user.id,
+            ticket_number: tempTicket,
+            name,
+            status: 'waiting',
+            type,
+            phone: phone || undefined,
+            position: tempPosition,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            motif,
+            is_priority: isPriority,
+            arrival_time: new Date().toISOString(),
+            rdv_time: rdvTime
+        };
+
+        OfflineQueue.addToQueue({
+            type: 'ADD_PATIENT',
+            payload: optimisticPatient
+        });
+
+        return optimisticPatient;
+    }
+    // END OFFLINE HANDLING
 
     const ticketNumber = await getNextTicketNumber();
     const position = await getNextPosition(user.id);
@@ -166,6 +227,11 @@ export async function addPatientByClinicId(
     rdvTime?: string,
     motif: string = 'consultation'
 ): Promise<Patient> {
+    if (isOffline()) {
+        throw new Error("Impossible de rejoindre la file d'attente hors ligne.");
+    }
+    
+    // ... (Keep existing logic for public add, usually requires internet anyway)
     const supabase = createClient();
 
     console.log('Step 1: Looking up clinic with ID:', clinicId);
@@ -290,6 +356,21 @@ export async function updatePatientStatus(
     patientId: string,
     status: 'waiting' | 'active' | 'completed' | 'away'
 ): Promise<Patient> {
+    
+    if (isOffline()) {
+        OfflineQueue.addToQueue({
+            type: 'UPDATE_STATUS',
+            payload: { id: patientId, status }
+        });
+        
+        // Return optimistic partial
+        return {
+           id: patientId,
+           status: status,
+           // other fields are not available here without fetching, but usually caller updates state
+        } as Patient; 
+    }
+
     const supabase = createClient();
 
     const { data, error } = await supabase
@@ -310,6 +391,18 @@ export async function updatePatient(
     patientId: string,
     updates: Partial<Patient>
 ): Promise<Patient> {
+    if (isOffline()) {
+        OfflineQueue.addToQueue({
+            type: 'UPDATE_PATIENT',
+            payload: { id: patientId, ...updates }
+        });
+        
+        return {
+           id: patientId,
+           ...updates,
+        } as Patient;
+    }
+
     const supabase = createClient();
 
     const { data, error } = await supabase
@@ -327,6 +420,11 @@ export async function updatePatient(
  * Reorder patients in the queue
  */
 export async function reorderPatients(patientIds: string[]): Promise<void> {
+    if (isOffline()) {
+        toast.error("La réinitialisation de l'ordre n'est pas disponible hors ligne.");
+        return;
+    }
+
     const supabase = createClient();
 
     // We update each patient's position based on their index in the array
@@ -344,6 +442,14 @@ export async function reorderPatients(patientIds: string[]): Promise<void> {
  * Delete a patient
  */
 export async function deletePatient(patientId: string): Promise<void> {
+    if (isOffline()) {
+        OfflineQueue.addToQueue({
+            type: 'DELETE_PATIENT',
+            payload: { id: patientId }
+        });
+        return;
+    }
+
     const supabase = createClient();
 
     const { error } = await supabase
@@ -396,6 +502,17 @@ export function subscribeToPatients(
         )
         .subscribe((status) => {
             console.log('Realtime subscription status:', status);
+            
+            // Check for recovery
+            if (status === 'SUBSCRIBED') {
+               // We might trigger a queue sync here?
+               // Ideally, we want to call OfflineQueue.processQueue() when connection restores.
+               // We already have useNetworkStatus doing that? No, useNetworkStatus just updates state.
+               // We need to trigger it.
+               // Since real-time subscription status changes when we reconnect, this is a good place.
+               OfflineQueue.processQueue();
+            }
+
             if (onStatusChange) {
                 onStatusChange(status);
             }
