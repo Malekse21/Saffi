@@ -25,6 +25,8 @@ interface OnboardingData {
     openingTime: string;
     closingTime: string;
     hasLunchBreak: boolean;
+    lunchStart: string;
+    lunchEnd: string;
 }
 
 // --- Save to Supabase ---
@@ -39,6 +41,8 @@ const saveStepData = async (data: Partial<OnboardingData>, isComplete: boolean =
             opening_time: data.openingTime,
             closing_time: data.closingTime,
             has_lunch_break: data.hasLunchBreak,
+            lunch_start_time: data.lunchStart,
+            lunch_end_time: data.lunchEnd,
             clinic_id: user.user_metadata?.clinic_id, // Store clinic_id from metadata
             plan: 'trial', // Set to trial initially
         };
@@ -70,6 +74,8 @@ export default function OnboardingWizard() {
         openingTime: '08:00',
         closingTime: '17:00',
         hasLunchBreak: true,
+        lunchStart: '12:00',
+        lunchEnd: '14:00'
     });
 
     // Get doctor name on mount
@@ -196,21 +202,12 @@ export default function OnboardingWizard() {
 }
 
 // --- STEP 1: SPECIALTY ---
+// --- STEP 1: SPECIALTY ---
+import { SPECIALTIES } from '@/lib/specialties';
+import { DynamicIcon } from '@/components/DynamicIcon';
+
 function StepSpecialty({ custom, variants, value, onChange, onNext }: any) {
-    const [searchTerm, setSearchTerm] = useState("");
-    const specialties = [
-        "Médecine Générale", "Pédiatrie", "Cardiologie", "Dermatologie",
-        "Gynécologie", "Ophtalmologie", "Psychiatrie", "Dentiste",
-        "Orthopédie", "ORL", "Neurologie", "Rhumatologie",
-        "Endocrinologie", "Gastro-entérologie", "Pneumologie", "Urologie",
-        "Chirurgie Générale", "Chirurgie Esthétique", "Radiologie", "Kinésithérapie",
-        "Nutrition", "Psychologie", "Ostéopathie", "Autre"
-    ];
-
-    const filteredSpecialties = specialties.filter(s =>
-        s.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
+    
     return (
         <motion.div
             custom={custom}
@@ -223,37 +220,26 @@ function StepSpecialty({ custom, variants, value, onChange, onNext }: any) {
         >
             <div className="space-y-2">
                 <h2 className="font-display text-4xl font-bold tracking-tight">Votre Spécialité.</h2>
-                <p className="text-gray-500 font-medium">Quelle est votre domaine d'expertise ?</p>
+                <p className="text-gray-500 font-medium">Choisissez votre domaine d&apos;expertise.</p>
             </div>
 
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                    type="text"
-                    placeholder="Rechercher..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full h-10 pl-10 pr-3 bg-white border-2 border-black rounded-md text-sm placeholder:text-gray-400 focus:outline-none focus:bg-yellow-50 transition-colors"
-                />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 overflow-y-auto max-h-[300px] pr-2 scrollbar-thin scrollbar-thumb-black scrollbar-track-gray-100">
-                {filteredSpecialties.map((spec) => (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 overflow-y-auto max-h-[400px] pr-2">
+                {Object.entries(SPECIALTIES).map(([key, config]) => (
                     <motion.button
-                        key={spec}
+                        key={key}
+                        onClick={() => onChange(key)}
                         whileHover={{ scale: 1.02, y: -2 }}
                         whileTap={{ scale: 0.98 }}
-                        onClick={() => onChange(spec)}
                         className={`
-              p-3 border-2 border-black text-left flex items-center gap-2 transition-all rounded-md
-              ${value === spec
-                                ? 'bg-black text-white shadow-[2px_2px_0px_0px_#2C2B57]'
+                            p-4 border-2 border-black flex flex-col items-center justify-center gap-3 rounded-md transition-all
+                            ${value === key 
+                                ? 'bg-yellow-400 shadow-[4px_4px_0px_0px_#000]' 
                                 : 'bg-white hover:bg-gray-50 shadow-[2px_2px_0px_0px_#000]'
                             }
-            `}
+                        `}
                     >
-                        <Stethoscope size={16} className={value === spec ? 'text-white' : 'text-gray-400'} />
-                        <span className="font-bold text-sm truncate">{spec}</span>
+                        <DynamicIcon name={config.icon} className="w-8 h-8" strokeWidth={2} />
+                        <span className="font-bold text-sm uppercase tracking-wide text-center">{config.label}</span>
                     </motion.button>
                 ))}
             </div>
@@ -274,12 +260,8 @@ function StepSpecialty({ custom, variants, value, onChange, onNext }: any) {
 
 // --- STEP 2: DURATION ---
 function StepDuration({ custom, variants, value, onChange, onNext }: any) {
-    const options: { val: ConsultationDuration; label: string; desc: string }[] = [
-        { val: 15, label: "15 min", desc: "Flash / Express" },
-        { val: 20, label: "20 min", desc: "Standard" },
-        { val: 30, label: "30 min", desc: "Spécialiste" },
-        { val: 45, label: "45 min+", desc: "Psy / Chirurgie" },
-    ];
+    // 6 Predefined aesthetic options
+    const options = [10, 15, 20, 30, 45, 60];
 
     return (
         <motion.div
@@ -299,21 +281,21 @@ function StepDuration({ custom, variants, value, onChange, onNext }: any) {
             <div className="grid grid-cols-2 gap-4">
                 {options.map((opt) => (
                     <motion.button
-                        key={opt.val}
+                        key={opt}
                         whileHover={{ scale: 1.02, y: -2 }}
                         whileTap={{ scale: 0.98 }}
-                        onClick={() => onChange(opt.val)}
+                        onClick={() => onChange(opt)}
                         className={`
-              p-6 border-2 border-black text-left flex flex-col gap-1 transition-all
-              ${value === opt.val
+              p-6 border-2 border-black text-center flex flex-col gap-1 transition-all items-center justify-center rounded-md
+              ${value === opt
                                 ? 'bg-black text-white shadow-[4px_4px_0px_0px_#2C2B57]'
                                 : 'bg-white hover:bg-gray-50 shadow-[4px_4px_0px_0px_#000]'
                             }
             `}
                     >
-                        <span className="text-2xl font-black font-display">{opt.label}</span>
-                        <span className={`text-xs font-bold uppercase ${value === opt.val ? 'text-gray-200' : 'text-gray-500'}`}>
-                            {opt.desc}
+                        <span className="text-3xl font-black font-display">{opt}</span>
+                        <span className={`text-xs font-bold uppercase tracking-wider ${value === opt ? 'text-gray-300' : 'text-gray-500'}`}>
+                            minutes
                         </span>
                     </motion.button>
                 ))}
@@ -342,59 +324,93 @@ function StepSchedule({ custom, variants, data, onChange, onNext }: any) {
             initial="enter"
             animate="center"
             exit="exit"
-            className="flex flex-col gap-8"
+            className="flex flex-col gap-6"
         >
             <div className="space-y-2">
                 <h2 className="font-display text-4xl font-bold tracking-tight">Vos Horaires.</h2>
                 <p className="text-gray-500 font-medium">À quelle heure ouvrez-vous et fermez-vous le cabinet ?</p>
             </div>
 
-            <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                        <label className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
-                            <Sun size={16} /> Ouverture
+            <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                        <label className="text-xs font-bold uppercase tracking-wider flex items-center gap-2 text-gray-500">
+                            <Sun size={14} /> Ouverture
                         </label>
                         <input
                             type="time"
                             value={data.openingTime}
                             onChange={(e) => onChange({ openingTime: e.target.value })}
-                            className="w-full p-3 bg-white border-2 border-black font-mono text-xl focus:outline-none focus:bg-gray-100 shadow-[4px_4px_0px_0px_#000]"
+                            className="w-full p-3 bg-white border-2 border-black font-mono text-xl focus:outline-none focus:bg-gray-100 shadow-[2px_2px_0px_0px_#000]"
                         />
                     </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
-                            <Moon size={16} /> Fermeture
+                    <div className="space-y-1">
+                        <label className="text-xs font-bold uppercase tracking-wider flex items-center gap-2 text-gray-500">
+                            <Moon size={14} /> Fermeture
                         </label>
                         <input
                             type="time"
                             value={data.closingTime}
                             onChange={(e) => onChange({ closingTime: e.target.value })}
-                            className="w-full p-3 bg-white border-2 border-black font-mono text-xl focus:outline-none focus:bg-gray-100 shadow-[4px_4px_0px_0px_#000]"
+                            className="w-full p-3 bg-white border-2 border-black font-mono text-xl focus:outline-none focus:bg-gray-100 shadow-[2px_2px_0px_0px_#000]"
                         />
                     </div>
                 </div>
 
-                {/* Lunch Toggle */}
-                <div
-                    onClick={() => onChange({ hasLunchBreak: !data.hasLunchBreak })}
-                    className="cursor-pointer border-2 border-black p-4 flex items-center justify-between bg-white hover:bg-gray-50 shadow-[4px_4px_0px_0px_#000]"
-                >
-                    <div className="flex items-center gap-3">
-                        <div className={`p-2 border-2 border-black ${data.hasLunchBreak ? 'bg-[#2C2B57]' : 'bg-gray-200'}`}>
-                            <Coffee size={20} className={data.hasLunchBreak ? 'text-white' : 'text-black'} />
+                {/* Lunch Break Section */}
+                <div className="border-2 border-black p-4 bg-gray-50 rounded-md space-y-4">
+                    <div
+                        onClick={() => onChange({ hasLunchBreak: !data.hasLunchBreak })}
+                        className="cursor-pointer flex items-center justify-between"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 border-2 border-black rounded-md ${data.hasLunchBreak ? 'bg-[#2C2B57]' : 'bg-white'}`}>
+                                <Coffee size={18} className={data.hasLunchBreak ? 'text-white' : 'text-black'} />
+                            </div>
+                            <div>
+                                <p className="font-bold text-base">Pause Déjeuner</p>
+                                <p className="text-xs text-gray-500">Fermer la file pendant une pause</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="font-bold text-lg">Pause Déjeuner ?</p>
-                            <p className="text-xs text-gray-500">Fermer la file entre 12h et 14h</p>
+                        <div className={`w-12 h-7 border-2 border-black rounded-full flex items-center px-1 transition-colors ${data.hasLunchBreak ? 'bg-black' : 'bg-gray-300'}`}>
+                            <motion.div
+                                layout
+                                className={`w-4 h-4 border-2 border-black rounded-full ${data.hasLunchBreak ? 'bg-[#2C2B57]' : 'bg-white'}`}
+                            />
                         </div>
                     </div>
-                    <div className={`w-14 h-8 border-2 border-black rounded-full flex items-center px-1 transition-colors ${data.hasLunchBreak ? 'bg-black' : 'bg-gray-200'}`}>
-                        <motion.div
-                            layout
-                            className={`w-5 h-5 border-2 border-black rounded-full ${data.hasLunchBreak ? 'bg-[#2C2B57]' : 'bg-white'}`}
-                        />
-                    </div>
+
+                    <AnimatePresence>
+                        {data.hasLunchBreak && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden"
+                            >
+                                <div className="grid grid-cols-2 gap-4 pt-2 border-t-2 border-dashed border-gray-300 mt-2">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold uppercase text-gray-500">Début</label>
+                                        <input
+                                            type="time"
+                                            value={data.lunchStart || '12:00'}
+                                            onChange={(e) => onChange({ lunchStart: e.target.value })}
+                                            className="w-full p-2 bg-white border-2 border-black font-mono text-lg focus:outline-none focus:bg-yellow-50"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-bold uppercase text-gray-500">Fin</label>
+                                        <input
+                                            type="time"
+                                            value={data.lunchEnd || '14:00'}
+                                            onChange={(e) => onChange({ lunchEnd: e.target.value })}
+                                            className="w-full p-2 bg-white border-2 border-black font-mono text-lg focus:outline-none focus:bg-yellow-50"
+                                        />
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             </div>
 

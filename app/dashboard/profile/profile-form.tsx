@@ -228,38 +228,13 @@ export default function ProfileForm({ profile }: { profile: any }) {
                                     <Briefcase className="inline h-4 w-4 mr-2" />
                                     Spécialité
                                 </label>
-                                <select
+                                <input
+                                    type="text"
                                     name="specialty"
                                     value={formData.specialty}
-                                    onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
-                                    className="w-full border-2 border-black px-4 py-3 font-medium focus:outline-none focus:ring-2 focus:ring-black bg-white"
-                                >
-                                    <option value="">Sélectionnez une spécialité</option>
-                                    <option value="Médecine Générale">Médecine Générale</option>
-                                    <option value="Pédiatrie">Pédiatrie</option>
-                                    <option value="Cardiologie">Cardiologie</option>
-                                    <option value="Dermatologie">Dermatologie</option>
-                                    <option value="Gynécologie">Gynécologie</option>
-                                    <option value="Ophtalmologie">Ophtalmologie</option>
-                                    <option value="Psychiatrie">Psychiatrie</option>
-                                    <option value="Dentiste">Dentiste</option>
-                                    <option value="Orthopédie">Orthopédie</option>
-                                    <option value="ORL">ORL</option>
-                                    <option value="Neurologie">Neurologie</option>
-                                    <option value="Rhumatologie">Rhumatologie</option>
-                                    <option value="Endocrinologie">Endocrinologie</option>
-                                    <option value="Gastro-entérologie">Gastro-entérologie</option>
-                                    <option value="Pneumologie">Pneumologie</option>
-                                    <option value="Urologie">Urologie</option>
-                                    <option value="Chirurgie Générale">Chirurgie Générale</option>
-                                    <option value="Chirurgie Esthétique">Chirurgie Esthétique</option>
-                                    <option value="Radiologie">Radiologie</option>
-                                    <option value="Kinésithérapie">Kinésithérapie</option>
-                                    <option value="Nutrition">Nutrition</option>
-                                    <option value="Psychologie">Psychologie</option>
-                                    <option value="Ostéopathie">Ostéopathie</option>
-                                    <option value="Autre">Autre</option>
-                                </select>
+                                    disabled
+                                    className="w-full border-2 border-black px-4 py-3 font-medium bg-gray-100 focus:outline-none cursor-not-allowed"
+                                />
                             </div>
                             <div>
                                 <label className="block text-sm font-bold mb-2 uppercase">
@@ -272,17 +247,11 @@ export default function ProfileForm({ profile }: { profile: any }) {
                                     onChange={(e) => setFormData({ ...formData, consultationDuration: parseInt(e.target.value) })}
                                     className="w-full border-2 border-black px-4 py-3 font-medium focus:outline-none focus:ring-2 focus:ring-black bg-white"
                                 >
-                                    <option value="5">5 min</option>
                                     <option value="10">10 min</option>
                                     <option value="15">15 min</option>
                                     <option value="20">20 min</option>
-                                    <option value="25">25 min</option>
                                     <option value="30">30 min</option>
-                                    <option value="35">35 min</option>
-                                    <option value="40">40 min</option>
                                     <option value="45">45 min</option>
-                                    <option value="50">50 min</option>
-                                    <option value="55">55 min</option>
                                     <option value="60">60 min</option>
                                 </select>
                             </div>
